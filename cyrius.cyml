@@ -1,0 +1,18 @@
+[package]
+name = "iam"
+version = "${file:VERSION}"
+description = "iam — fastfetch-equivalent system info display. Pure inverse of whoami: whoami says who the user is, iam says what the system is. Thin presentation over the mihi probe library."
+license = "GPL-3.0-only"
+language = "cyrius"
+cyrius = "6.0.0"
+
+[build]
+entry = "src/main.cyr"
+test = "src/test.cyr"
+output = "iam"
+
+[deps]
+stdlib = ["string", "fmt", "alloc", "io", "vec", "str", "syscalls", "assert", "bench"]
+
+# Future: [deps.mihi] for the shared probe library — pinned once mihi
+# lands a published tag. For now iam is independent at scaffold stage.

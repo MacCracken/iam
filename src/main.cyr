@@ -1,0 +1,21 @@
+# iam — main entry point.
+#
+# Scaffold stage: prints version and exits. Real form (terse
+# system-fact dump from mihi probes — CPU / RAM / kernel / uptime /
+# distro / hostname) lands once mihi is consumable and the
+# whoami-simple presentation rules are nailed down.
+#
+# Design principle: NO theming engine, NO plugin system, NO
+# configurable output. whoami prints the user; iam prints the system —
+# same minimalism.
+#
+# Stdlib auto-included via cyrius.cyml [deps].stdlib.
+
+fn main() {
+    alloc_init();
+    println("iam v0.1.0 — scaffold");
+    return 0;
+}
+
+var r = main();
+syscall(SYS_EXIT, r);
