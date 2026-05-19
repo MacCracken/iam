@@ -3,24 +3,41 @@
 ## Build
 
 ```sh
-cyrius deps                              # resolve dependencies
-cyrius build src/main.cyr build/iam    # compile
-cyrius test                              # run [build].test + tests/*.tcyr
+cyrius deps                          # resolve stdlib (+ mihi from M1 onward)
+cyrius build src/main.cyr build/iam  # compile
+./build/iam                           # prints scaffold version line
+cyrius test                           # run tests/*.tcyr
 ```
 
 ## Layout
 
-- `src/main.cyr` — entry point. Top-level `var r = main(); syscall(SYS_EXIT, r);`.
-- `src/test.cyr` — top-level test entry referenced by `cyrius.cyml [build].test`. Add unit cases here or in `tests/iam.tcyr`.
-- `tests/iam.tcyr` — primary test suite (`cyrius test` auto-discovers).
-- `tests/iam.bcyr` — benchmarks (`cyrius bench`).
-- `tests/iam.fcyr` — fuzz harness (`cyrius fuzz`).
+- `src/main.cyr` — entry point; CLI dispatch + line emission
+- `tests/iam.{tcyr,bcyr,fcyr}` — tests / benchmarks / fuzz
 
-## Adding a feature
+Once M1+ ships:
 
-1. Edit `src/main.cyr` (or add a new module and `include` it).
-2. Add a test case to `tests/iam.tcyr`.
-3. Run `cyrius test`.
-4. Bump `VERSION` and add a CHANGELOG entry before tagging.
+- `src/display.cyr` — line formatter (label-padded output)
+- `src/uptime.cyr` — seconds → human format
+- `[deps.mihi]` wired in `cyrius.cyml`
 
-See [`../adr/template.md`](../adr/template.md) when a non-trivial design choice deserves an ADR.
+## Adding a display line
+
+1. Confirm mihi has a probe for the fact you want. **If it doesn't,
+   add the probe to mihi first** — `iam` does not probe directly.
+2. Add the line to `src/main.cyr` / `src/display.cyr`.
+3. Add a happy-path test + a probe-returns-error test in
+   `tests/iam.tcyr`. The error path should produce `unknown` in
+   the output line, not crash.
+4. Update `docs/examples/sample-output.txt` if it exists.
+5. CHANGELOG entry under `Added`. Mark `Breaking` if it changes the
+   established line order.
+
+## Why so few features?
+
+`iam` is intentionally minimal — see `CLAUDE.md` § "Key Principles"
+and `docs/development/roadmap.md` § "Out of scope." Most "improvements"
+to neofetch/fastfetch belong in a sibling tool, not in `iam`.
+
+See [`../adr/template.md`](../adr/template.md) when a non-trivial
+design choice (especially anything that touches output shape)
+deserves an ADR.
