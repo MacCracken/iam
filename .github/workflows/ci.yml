@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_call:                    # reusable by release.yml as a gate
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,6 +19,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Cyrius toolchain
+        # Pulls the version pinned in cyrius.cyml [package].cyrius.
+        # Same pattern as mihi / darshana / chakshu / cyim — agnosticos
+        # ecosystem convention.
         run: |
           CYRIUS_VERSION="${CYRIUS_VERSION:-$(grep 'cyrius *= *"' cyrius.cyml 2>/dev/null | head -1 | sed 's/.*"\(.*\)"/\1/')}"
           echo "Installing Cyrius $CYRIUS_VERSION"
@@ -32,17 +36,216 @@ jobs:
           echo "CYRIUS_HOME=$HOME/.cyrius" >> $GITHUB_ENV
 
       - name: Resolve dependencies
+        # iam pulls stdlib + mihi (the probe library) + ai-hwaccel
+        # (transitively via mihi/gpu.cyr). See cyrius.cyml [deps.*].
         run: cyrius deps
 
       - name: Build
         run: |
           mkdir -p build
-          cyrius build src/main.cyr build/${{ github.event.repository.name }}
+          cyrius build src/main.cyr build/iam
+
+      - name: Smoke run
+        # Run the binary and verify it produces the expected six lines
+        # in the documented order. Output is mihi-probe-driven so the
+        # value half changes per runner; we anchor on the label column
+        # and line count, not the values.
+        #
+        # The label set + ordering IS the v1.0 contract (locks at M4
+        # ADR). Any change to this list is a Breaking change in
+        # CHANGELOG. Keep this gate aligned with state.md "Output".
+        run: |
+          ./build/iam > /tmp/iam.out
+          lines=$(wc -l < /tmp/iam.out)
+          if [ "$lines" -ne 6 ]; then
+            echo "FAIL: expected 6 output lines, got $lines"
+            cat /tmp/iam.out
+            exit 1
+          fi
+          for label in CPU Memory Kernel Host Distro Uptime; do
+            if ! grep -qE "^${label}:" /tmp/iam.out; then
+              echo "FAIL: no line starting with '${label}:'"
+              cat /tmp/iam.out
+              exit 1
+            fi
+          done
+          # Order check: the labels must appear in the documented
+          # sequence — the contract is "shape + order", not just
+          # "shape".
+          ord=$(grep -oE '^[A-Za-z]+:' /tmp/iam.out | tr -d ':' | tr '\n' ' ')
+          want="CPU Memory Kernel Host Distro Uptime "
+          if [ "$ord" != "$want" ]; then
+            echo "FAIL: label order is '$ord', expected '$want'"
+            cat /tmp/iam.out
+            exit 1
+          fi
+          echo "OK: six lines, correct labels, correct order"
+          cat /tmp/iam.out
+
+      - name: Lint
+        # Same tolerance policy as mihi / darshana: every src file
+        # clean; the only acceptable warning is the cosmetic "exceeds
+        # 120 characters" rule on comment-divider lines. `cyrius lint`
+        # exits non-zero on any output, so we wrap in `|| true` to
+        # coexist with the implicit `set -e`.
+        run: |
+          fail=0
+          for f in src/*.cyr; do
+            out=$(cyrius lint "$f" 2>&1 || true)
+            echo "$out"
+            bad=$(echo "$out" | grep -E '^\s*warn ' | grep -v 'exceeds 120 characters' || true)
+            if [ -n "$bad" ]; then
+              fail=1
+            fi
+          done
+          [ $fail -eq 0 ] || { echo "lint: non-cosmetic warnings present"; exit 1; }
 
       - name: Test
-        # v5.6.28: bare `cyrius test` picks up the [build].test entry
-        # AND auto-discovers tests/*.tcyr — avoids the previous
-        # `cyrius test src/test.cyr` form that hard-failed when the
-        # stub didn't exist (Issue 1) and also wouldn't ever exercise
-        # tests/${proj}.tcyr.
-        run: cyrius test
+        # Explicit path — bare `cyrius test` auto-discovery has varied
+        # between releases (see darshana's note). Using the documented
+        # `cyrius test <file>` form avoids the discovery surface.
+        run: cyrius test tests/iam.tcyr
+
+      - name: DCE parity check
+        # Release builds may set CYRIUS_DCE=1 to drop unreachable
+        # stdlib functions (iam pulls in mihi + ai-hwaccel ≈ 1500+
+        # unreachable fns from the bundle's GPU/training/cost code
+        # that iam doesn't call). DCE'd binary must still produce
+        # the same six lines — proves no live symbol was mis-classified
+        # as dead. This is high-value for iam specifically because
+        # most of the dep surface is unused.
+        run: |
+          CYRIUS_DCE=1 cyrius build src/main.cyr build/iam-dce
+          echo "iam:     $(wc -c < build/iam) bytes"
+          echo "iam-dce: $(wc -c < build/iam-dce) bytes"
+          ./build/iam-dce > /tmp/iam-dce.out
+          lines=$(wc -l < /tmp/iam-dce.out)
+          [ "$lines" -eq 6 ] || {
+            echo "FAIL: DCE'd binary output line count ($lines) ≠ 6"
+            cat /tmp/iam-dce.out
+            exit 1
+          }
+          # Byte-equal value half is runner-dependent — only labels
+          # are checked here. Sufficient to catch a DCE mis-class.
+          for label in CPU Memory Kernel Host Distro Uptime; do
+            grep -qE "^${label}:" /tmp/iam-dce.out || {
+              echo "FAIL: DCE output missing '${label}:' line"
+              cat /tmp/iam-dce.out
+              exit 1
+            }
+          done
+          echo "OK: DCE'd binary preserves the six-line shape"
+
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan src/ for forbidden patterns
+        # iam CLAUDE.md "Don't" invariants enforced as scan rules:
+        #   - read-only, syscall-only: no sys_system / exec_*.
+        #   - probes route through mihi, not direct /proc / /sys
+        #     opens (those are mihi's job; iam is presentation only).
+        #   - no FFI / dynlib / pam — iam is meant to be a tiny,
+        #     auditable presentation surface.
+        #   - no env-var / config-file / dotfile configurability —
+        #     this is a v1.0-gate non-feature per roadmap.
+        #   - no huge stack buffers (≥ 64 KiB) — same 64 KiB threshold
+        #     the rest of the AGNOS first-party stack uses
+        #     (mihi / chakshu / owl / cyim / darshana).
+        #
+        # Scans src/ only — lib/ is dep-managed and includes mihi /
+        # ai-hwaccel bundles that legitimately call /proc / /sys.
+        run: |
+          FAIL=0
+
+          # Pure-presentation invariant — iam must not spawn processes.
+          exec_hits=$(grep -rnE '\bsys_(execve|execveat|fork|vfork|clone)\b|\bexec_(capture|vec)\b|\brun_capture\b|\bsys_system\b' src/ 2>/dev/null || true)
+          if [ -n "$exec_hits" ]; then
+            echo "FAIL: src/ spawns / execs (forbidden — iam is read-only)"
+            echo "$exec_hits"
+            FAIL=1
+          fi
+
+          # No direct /proc / /sys opens — those are mihi's domain.
+          # Allow mention in comments by anchoring on sys_open (the
+          # syscall) rather than the string itself.
+          proc_hits=$(grep -rnE 'sys_open\s*\(\s*"/(proc|sys|etc)/' src/ 2>/dev/null || true)
+          if [ -n "$proc_hits" ]; then
+            echo "FAIL: src/ opens /proc, /sys, or /etc directly — route through mihi"
+            echo "$proc_hits"
+            FAIL=1
+          fi
+
+          # No FFI / dynlib / pam imports.
+          ffi_hits=$(grep -rnE 'include "lib/(cffi|dynlib|fdlopen|pam)\.cyr"' src/ 2>/dev/null || true)
+          if [ -n "$ffi_hits" ]; then
+            echo "FAIL: src/ imports FFI / dynlib / pam library"
+            echo "$ffi_hits"
+            FAIL=1
+          fi
+
+          # No env-var reads — configurability through env vars is a
+          # v1.0-gate non-feature per docs/development/roadmap.md
+          # "Out of scope". `getenv` is the most likely vector; flag
+          # it so a contributor adding env-driven behavior has to
+          # justify it explicitly (no clean route exists yet).
+          env_hits=$(grep -rnE '\bgetenv\s*\(' src/ 2>/dev/null || true)
+          if [ -n "$env_hits" ]; then
+            echo "FAIL: src/ reads env vars — iam has no configurable surface"
+            echo "$env_hits"
+            FAIL=1
+          fi
+
+          # Large stack buffers — 64 KiB threshold consistent with
+          # AGNOS first-party stack convention. iam's largest probe
+          # scratch is the 8 KiB cpuinfo buffer; anything ≥ 64 KiB
+          # is a contributor mistake (or a sign the work belongs in
+          # mihi, not iam).
+          awk -F: '
+            /var [A-Za-z_][A-Za-z0-9_]*\[[0-9]+\]/ {
+              match($0, /\[[0-9]+\]/); s=substr($0,RSTART+1,RLENGTH-2); n=s+0;
+              if (n >= 65536) print FILENAME":"NR": large stack buffer ("n" bytes): "$0
+            }' src/*.cyr > /tmp/bigbuf.txt
+          if [ -s /tmp/bigbuf.txt ]; then
+            cat /tmp/bigbuf.txt
+            FAIL=1
+          fi
+
+          echo "security scan complete (fail: $FAIL)"
+          exit $FAIL
+
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required files
+        # Floor tightens as v1.0 approaches. M4 (output-shape ADR)
+        # and M5 (audit doc) will add required entries to this list.
+        # For now, the agnosticos first-party-standards baseline.
+        run: |
+          MISSING=0
+          for f in README.md CHANGELOG.md VERSION LICENSE \
+                   SECURITY.md CODE_OF_CONDUCT.md CONTRIBUTING.md \
+                   cyrius.cyml CLAUDE.md \
+                   docs/development/roadmap.md docs/development/state.md; do
+            if [ -f "$f" ]; then echo "  OK: $f"
+            else echo "  MISSING: $f"; MISSING=1; fi
+          done
+          exit $MISSING
+
+      - name: Verify version consistency
+        # Single source of truth is VERSION. Two derived surfaces must
+        # agree: the CHANGELOG section header and cyrius.cyml's
+        # file: indirection.
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "VERSION file: $VERSION"
+          grep -qE "^## \[${VERSION}\]" CHANGELOG.md \
+            || { echo "FAIL: CHANGELOG.md missing section [${VERSION}]"; exit 1; }
+          grep -qE '^version *= *"\$\{file:VERSION\}"' cyrius.cyml \
+            || { echo "FAIL: cyrius.cyml version no longer pulls from VERSION"; exit 1; }
+          echo "Version consistent: VERSION = CHANGELOG = cyrius.cyml = $VERSION"

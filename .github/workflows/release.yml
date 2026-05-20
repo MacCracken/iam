@@ -1,33 +1,81 @@
 name: Release
 
+# Triggers on semver tags only (0.3.0, 1.0.0, 2.0.0-rc1). An optional
+# leading `v` is accepted (v0.3.0). Non-numeric tags are ignored —
+# this avoids accidental releases from arbitrary tag pushes.
 on:
   push:
-    tags: ['[0-9]*']
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+'
 
 permissions:
   contents: write
 
 jobs:
+  # ────────────────────────────────────────────────────────────────
+  # Gate — full CI must pass before anything builds for release.
+  # Reuses ci.yml via workflow_call so a release can never ship a
+  # binary that hasn't passed lint / tests / smoke / DCE parity /
+  # security scan / docs check.
+  # ────────────────────────────────────────────────────────────────
   ci:
-    name: CI Gate
+    name: CI gate
     uses: ./.github/workflows/ci.yml
 
-  release:
-    name: Build & Release
-    needs: [ci]
+  # ────────────────────────────────────────────────────────────────
+  # Verify — VERSION file, cyrius.cyml indirection, and the git tag
+  # must all agree before anything is packaged.
+  # ────────────────────────────────────────────────────────────────
+  version-verify:
+    name: Version verify
+    needs: ci
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify version
+      - name: Extract VERSION / tag / cyml version
+        id: extract
         run: |
-          FILE_VERSION=$(cat VERSION | tr -d '[:space:]')
-          TAG_VERSION="${GITHUB_REF_NAME}"
-          test "$FILE_VERSION" = "$TAG_VERSION" || { echo "VERSION ($FILE_VERSION) != tag ($TAG_VERSION)"; exit 1; }
+          TAG="${GITHUB_REF_NAME#v}"   # strip optional leading 'v'
+          echo "$TAG" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+' \
+            || { echo "::error::tag ($TAG) is not semver"; exit 1; }
+
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "VERSION file:  $VERSION"
+          echo "git tag:       $TAG"
+
+          if ! grep -qE '^version *= *"\$\{file:VERSION\}"' cyrius.cyml; then
+            echo "::error::cyrius.cyml version no longer resolves via \${file:VERSION}" >&2
+            exit 1
+          fi
+
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "::error::VERSION ($VERSION) != git tag ($TAG)" >&2
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  # ────────────────────────────────────────────────────────────────
+  # Package — build the release binary (with DCE) and bundle it with
+  # project metadata. iam is end-user-facing; the artifact is a
+  # statically-linked binary, not a library bundle.
+  # ────────────────────────────────────────────────────────────────
+  package:
+    name: Package
+    needs: version-verify
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version-verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Install Cyrius toolchain
         run: |
-          CYRIUS_VERSION="${CYRIUS_VERSION:-$(grep 'cyrius *= *"' cyrius.cyml 2>/dev/null | head -1 | sed 's/.*"\(.*\)"/\1/')}"
+          CYRIUS_VERSION=$(grep 'cyrius *= *"' cyrius.cyml | head -1 | sed 's/.*"\(.*\)"/\1/')
           echo "Installing Cyrius $CYRIUS_VERSION"
           curl -sLO "https://github.com/MacCracken/cyrius/releases/download/$CYRIUS_VERSION/cyrius-$CYRIUS_VERSION-x86_64-linux.tar.gz"
           tar xzf "cyrius-$CYRIUS_VERSION-x86_64-linux.tar.gz"
@@ -37,16 +85,138 @@ jobs:
           cp -r "$CYRIUS_DIR/lib/"* "$HOME/.cyrius/lib/" 2>/dev/null || true
           chmod +x "$HOME/.cyrius/bin/"* 2>/dev/null || true
           echo "$HOME/.cyrius/bin" >> $GITHUB_PATH
-          echo "CYRIUS_HOME=$HOME/.cyrius" >> $GITHUB_ENV
 
-      - name: Build
+      - name: Resolve dependencies
+        run: cyrius deps
+
+      - name: Build release binary (DCE)
+        # Release builds use CYRIUS_DCE=1 — iam pulls in mihi +
+        # ai-hwaccel which together carry ~1500+ unreachable fns
+        # (GPU detectors, training-planner, cost-model). DCE drops
+        # them from the linked binary. Parity with the smoke-run
+        # output is verified in the CI gate above.
         run: |
-          cyrius deps
           mkdir -p build
-          cyrius build src/main.cyr build/${{ github.event.repository.name }}
+          CYRIUS_DCE=1 cyrius build src/main.cyr build/iam
+          echo "iam: $(wc -c < build/iam) bytes"
+          ./build/iam   # one last sanity print
+
+      - name: Package binary artifact
+        # Two artifacts:
+        #   - iam-${VERSION}-x86_64-linux.tar.gz — binary + metadata
+        #   - iam-${VERSION}-x86_64-linux       — bare binary for
+        #     direct download (matches whoami's "just a single file"
+        #     install ergonomics).
+        run: |
+          PKG="iam-${VERSION}-x86_64-linux"
+          mkdir -p "pkg/$PKG"
+          cp build/iam "pkg/$PKG/"
+          cp README.md LICENSE CHANGELOG.md VERSION "pkg/$PKG/"
+          mkdir -p out
+          tar czf "out/${PKG}.tar.gz" -C pkg "$PKG"
+          cp build/iam "out/${PKG}"
+
+      - name: Generate SHA256
+        run: |
+          cd out
+          sha256sum * > SHA256SUMS.bin
+
+      - name: Upload binary artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-bin
+          path: |
+            out/*.tar.gz
+            out/iam-*
+            out/SHA256SUMS.bin
+
+  # ────────────────────────────────────────────────────────────────
+  # Source tarball — language-agnostic, always linux runner. Shipped
+  # alongside the binary so offline mirrors / vendoring have a
+  # canonical archive even when GitHub's source-zip URLs aren't an
+  # option.
+  # ────────────────────────────────────────────────────────────────
+  source:
+    name: Source tarball
+    needs: version-verify
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version-verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create source tarball
+        run: |
+          mkdir -p out
+          git archive --format=tar.gz \
+            --prefix="iam-${VERSION}/" \
+            -o "out/iam-${VERSION}-src.tar.gz" HEAD
+          cd out
+          sha256sum "iam-${VERSION}-src.tar.gz" > SHA256SUMS.src
+
+      - name: Upload source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-source
+          path: |
+            out/*.tar.gz
+            out/SHA256SUMS.src
+
+  # ────────────────────────────────────────────────────────────────
+  # Release — collect artifacts + checksums, publish GitHub release.
+  # Body pulled from the matching CHANGELOG.md section. Pre-1.0
+  # releases publish as prerelease so package managers don't
+  # auto-promote them — iam's output shape is still pre-contract
+  # until M4's ADR + v1.0 cut.
+  # ────────────────────────────────────────────────────────────────
+  release:
+    name: GitHub release
+    needs: [package, source, version-verify]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.version-verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-raw
+
+      - name: Consolidate artifacts
+        run: |
+          mkdir -p out
+          find dist-raw -type f \( -name '*.tar.gz' -o -name 'iam-*' -o -name 'SHA256SUMS.*' \) \
+            -exec cp {} out/ \;
+          cd out
+          cat SHA256SUMS.* | sort -u > SHA256SUMS
+          rm -f SHA256SUMS.*
+          ls -la
+
+      - name: Extract release body from CHANGELOG
+        # Pull the section under `## [${VERSION}]` and stop at the
+        # next `## [` heading. Falls back to GitHub's
+        # generate_release_notes when the section is empty (e.g.
+        # release notes added post-tag).
+        run: |
+          awk -v ver="${VERSION}" '
+            $0 ~ "^## \\[" ver "\\]" { found=1; next }
+            found && /^## \[/         { exit }
+            found                    { print }
+          ' CHANGELOG.md > /tmp/body.md
+          if [ ! -s /tmp/body.md ]; then
+            echo "::warning::CHANGELOG.md has no body for ${VERSION}; falling back to generated notes"
+          fi
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          name: "iam ${{ env.VERSION }}"
+          body_path: /tmp/body.md
+          prerelease: ${{ startsWith(env.VERSION, '0.') }}
+          files: |
+            out/*.tar.gz
+            out/iam-*
+            out/SHA256SUMS
           generate_release_notes: true
-          files: build/*
+          fail_on_unmatched_files: true
