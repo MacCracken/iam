@@ -1,0 +1,154 @@
+# iam — line printer + value formatters.
+#
+# One emitter, two formatters. Every displayed line routes through
+# `iam_emit` (or `iam_emit_buf`) so the v1.0 output-shape ADR has a
+# single place to lock layout.
+#
+# Layout contract (informal until M4 lands the ADR):
+#   "<LABEL>:<padding><VALUE>\n"
+#   - label column is IAM_LABEL_WIDTH bytes wide (label + ':' padded
+#     with spaces). All six current labels fit: longest is "Memory" /
+#     "Distro" / "Uptime" / "Kernel" (6 chars + ':' + 1 space = 8).
+#   - value column runs to EOL.
+#   - missing value (probe returned null/negative) renders as
+#     IAM_UNKNOWN_TEXT — never an error to stderr, never an empty
+#     line. iam is a presentation surface; mihi owns probe failure.
+#
+# Buffer-write helpers (`iam_format_bytes`, `iam_format_uptime` in
+# uptime.cyr) return byte counts rather than cstring pointers because
+# the formatter writes into a caller-owned scratch buffer; pairing
+# them with `iam_emit_buf` skips a null-terminate step.
+
+enum IamLayout {
+    IAM_LABEL_WIDTH = 8;
+}
+
+# Display string when a probe returns no value. Kept short and
+# unambiguous; the parens make the placeholder distinguishable from
+# a literal value.
+var IAM_UNKNOWN_TEXT = "(unknown)";
+var IAM_UNKNOWN_LEN  = 9;
+
+# Emit "<label>:<padding><value>\n". `label` is a bare cstring like
+# "CPU" (no trailing colon); `value` is the probe result. value=0
+# means probe failure → emit IAM_UNKNOWN_TEXT.
+fn iam_emit(label, value): i64 {
+    var llen = strlen(label);
+    print(label, llen);
+    print(":", 1);
+    var pad = IAM_LABEL_WIDTH - llen - 1;
+    if (pad < 1) { pad = 1; }
+    fmt_pad(pad);
+    if (value == 0) {
+        print(IAM_UNKNOWN_TEXT, IAM_UNKNOWN_LEN);
+        print("\n", 1);
+    } else {
+        println(value);
+    }
+    return 0;
+}
+
+# Variant for pre-formatted values held in a byte buffer (no NUL
+# terminator). Used by the byte-size and uptime formatters whose
+# outputs live in caller-owned scratch buffers. `blen <= 0` is the
+# "formatter failed" signal — render as unknown.
+fn iam_emit_buf(label, buf, blen): i64 {
+    var llen = strlen(label);
+    print(label, llen);
+    print(":", 1);
+    var pad = IAM_LABEL_WIDTH - llen - 1;
+    if (pad < 1) { pad = 1; }
+    fmt_pad(pad);
+    if (blen <= 0) {
+        print(IAM_UNKNOWN_TEXT, IAM_UNKNOWN_LEN);
+        print("\n", 1);
+    } else {
+        print(buf, blen);
+        print("\n", 1);
+    }
+    return 0;
+}
+
+# Specialised kernel-line emitter: two adjoining cstrings (name,
+# version) — typically pointers into the same uts buffer — joined
+# with a single space. Avoids allocating a scratch buffer for the
+# common case where both probes succeed.
+fn iam_emit_kernel(label, name, version): i64 {
+    if (name == 0 || version == 0) {
+        iam_emit(label, 0);
+        return 0;
+    }
+    var llen = strlen(label);
+    print(label, llen);
+    print(":", 1);
+    var pad = IAM_LABEL_WIDTH - llen - 1;
+    if (pad < 1) { pad = 1; }
+    fmt_pad(pad);
+    print(name, strlen(name));
+    print(" ", 1);
+    println(version);
+    return 0;
+}
+
+# Write decimal `n` (>= 0) into `buf` starting at offset 0. Returns
+# bytes written, or 0 if `cap` was too small. Pure function — no
+# syscalls, no null terminator. Shared between bytes / uptime
+# formatters.
+#
+# Defensive: caps digit count at 20 (i64 max is 19 digits). A
+# `cap` smaller than the digit count returns 0 without partial
+# writes, so callers can detect the failure cleanly.
+fn iam_uint_into(buf, cap, n): i64 {
+    if (cap <= 0) { return 0; }
+    if (n < 0) { return 0; }
+    if (n == 0) { store8(buf, 48); return 1; }
+    var tmp[20];
+    var ti = 0;
+    while (n > 0 && ti < 20) {
+        store8(&tmp + ti, 48 + n % 10);
+        ti = ti + 1;
+        n = n / 10;
+    }
+    if (ti > cap) { return 0; }
+    var i = 0;
+    while (i < ti) {
+        store8(buf + i, load8(&tmp + (ti - 1 - i)));
+        i = i + 1;
+    }
+    return ti;
+}
+
+# Format `bytes` into `buf` (recommend cap=16) using binary units
+# (B / KiB / MiB / GiB / TiB / PiB). Settles on the largest unit
+# whose floor-divided value is >= 1. Integer arithmetic only — no
+# fractional part. Returns bytes written; 0 on `cap` too small or
+# negative input.
+#
+# Whoami-simple rationale: a fixed integer display contract beats a
+# decimal-precision argument. Consumers who need exact figures call
+# mihi directly. 30 GiB and 30.9 GiB both render as "30 GiB" — the
+# user wanted "roughly how much RAM", not a measurement.
+fn iam_format_bytes(bytes, buf, cap): i64 {
+    if (cap < 6) { return 0; }
+    if (bytes < 0) { return 0; }
+    var value = bytes;
+    var unit = "B";
+    var ulen = 1;
+    if (value >= 1024) { value = value / 1024; unit = "KiB"; ulen = 3; }
+    if (value >= 1024) { value = value / 1024; unit = "MiB"; ulen = 3; }
+    if (value >= 1024) { value = value / 1024; unit = "GiB"; ulen = 3; }
+    if (value >= 1024) { value = value / 1024; unit = "TiB"; ulen = 3; }
+    if (value >= 1024) { value = value / 1024; unit = "PiB"; ulen = 3; }
+    var n = iam_uint_into(buf, cap, value);
+    if (n <= 0) { return 0; }
+    var pos = n;
+    if (pos + 1 + ulen > cap) { return 0; }
+    store8(buf + pos, 32);
+    pos = pos + 1;
+    var i = 0;
+    while (i < ulen) {
+        store8(buf + pos + i, load8(unit + i));
+        i = i + 1;
+    }
+    return pos + ulen;
+}

@@ -1,19 +1,63 @@
 # iam — main entry point.
 #
-# Scaffold stage: prints version and exits. Real form (terse
-# system-fact dump from mihi probes — CPU / RAM / kernel / uptime /
-# distro / hostname) lands once mihi is consumable and the
-# whoami-simple presentation rules are nailed down.
+# Six labeled lines, one per system fact, then exit. The output
+# order locks at the M4 output-shape ADR; until then, treat
+# additions/reorderings as Breaking changes per CHANGELOG.
 #
 # Design principle: NO theming engine, NO plugin system, NO
-# configurable output. whoami prints the user; iam prints the system —
-# same minimalism.
+# configurable output. `whoami` prints the user; `iam` prints the
+# system — same minimalism.
 #
-# Stdlib auto-included via cyrius.cyml [deps].stdlib.
+# Stdlib auto-included via cyrius.cyml [deps].stdlib. mihi and
+# ai-hwaccel bundles arrive in lib/ via `cyrius deps`.
+
+include "src/display.cyr"
+include "src/uptime.cyr"
 
 fn main() {
     alloc_init();
-    println("iam v0.1.0 — scaffold");
+
+    # One uname(2) syscall feeds three probes: kernel_name,
+    # kernel_version, hostname. See mihi docs/adr/0001-shared-uts-buffer.md.
+    var uts[390];
+    var ures = mihi_uname(&uts);
+    var uok = 1;
+    if (is_err_result(ures) == 1) { uok = 0; }
+
+    # CPU model — 8 KiB scratch. /proc/cpuinfo first-block fits.
+    var cpubuf[8192];
+    var cpu = mihi_cpu_model(&cpubuf, 8192);
+
+    # Memory total. /proc/meminfo is ~1.5 KB; 4 KiB scratch is the
+    # mihi-recommended cap. Bytes → "31 GiB" via iam_format_bytes.
+    var membuf[4096];
+    var mbytes = mihi_mem_total(&membuf, 4096);
+    var memout[24];
+    var mlen = 0;
+    if (mbytes > 0) { mlen = iam_format_bytes(mbytes, &memout, 24); }
+
+    # Distro PRETTY_NAME (or ID fallback). 1 KiB scratch.
+    var distbuf[1024];
+    var distro = mihi_distro(&distbuf, 1024);
+
+    # Uptime seconds → "1d 2h 3m". /proc/uptime is ~32 B; 64 B scratch.
+    var upbuf[64];
+    var usecs = mihi_uptime_secs(&upbuf, 64);
+    var upout[24];
+    var ulen = 0;
+    if (usecs >= 0) { ulen = iam_format_uptime(usecs, &upout, 24); }
+
+    iam_emit("CPU", cpu);
+    iam_emit_buf("Memory", &memout, mlen);
+    if (uok == 1) {
+        iam_emit_kernel("Kernel", mihi_kernel_name(&uts), mihi_kernel_version(&uts));
+        iam_emit("Host", mihi_hostname(&uts));
+    } else {
+        iam_emit("Kernel", 0);
+        iam_emit("Host", 0);
+    }
+    iam_emit("Distro", distro);
+    iam_emit_buf("Uptime", &upout, ulen);
     return 0;
 }
 

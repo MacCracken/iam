@@ -1,11 +1,111 @@
-# iam test suite
-# Stdlib auto-included via cyrius.cyml
+# iam test suite — formatter logic.
+#
+# Includes the formatter sources directly (not src/main.cyr — that
+# file's module-level `var r = main(); syscall(...)` would run iam
+# before any assertions). End-to-end probe wiring is exercised by
+# running ./build/iam in CI / by hand; here we cover pure-function
+# layout logic against fixed inputs.
+#
+# Stdlib auto-included via cyrius.cyml.
+
+include "src/display.cyr"
+include "src/uptime.cyr"
+
+# Assert a buf+len buffer equals an expected cstring byte-for-byte.
+fn assert_buf_eq(buf, blen, expected, msg) {
+    var elen = strlen(expected);
+    assert_eq(blen, elen, msg);
+    if (blen != elen) { return 0; }
+    var i = 0;
+    var ok = 1;
+    while (i < blen) {
+        if (load8(buf + i) != load8(expected + i)) { ok = 0; }
+        i = i + 1;
+    }
+    assert_eq(ok, 1, msg);
+    return 0;
+}
 
 fn main() {
     alloc_init();
+
     test_group("smoke");
     assert(1, "true is true");
     assert_eq(1 + 1, 2, "math works");
+
+    # ----- iam_uint_into ---------------------------------------------
+    test_group("display.cyr — iam_uint_into");
+    var ub[24];
+    var n = iam_uint_into(&ub, 24, 0);
+    assert_buf_eq(&ub, n, "0", "0 → \"0\"");
+    n = iam_uint_into(&ub, 24, 7);
+    assert_buf_eq(&ub, n, "7", "7 → \"7\"");
+    n = iam_uint_into(&ub, 24, 12345);
+    assert_buf_eq(&ub, n, "12345", "12345 → \"12345\"");
+    n = iam_uint_into(&ub, 24, 999999);
+    assert_buf_eq(&ub, n, "999999", "999999 → \"999999\"");
+    # cap-too-small returns 0 without partial writes
+    n = iam_uint_into(&ub, 2, 12345);
+    assert_eq(n, 0, "cap=2 for 5-digit number rejects (returns 0)");
+    # negative input rejected
+    n = iam_uint_into(&ub, 24, 0 - 1);
+    assert_eq(n, 0, "negative input rejected");
+
+    # ----- iam_format_bytes ------------------------------------------
+    # Floor-rounding is the contract — exact-string matches.
+    test_group("display.cyr — iam_format_bytes");
+    var bb[24];
+    n = iam_format_bytes(0, &bb, 24);
+    assert_buf_eq(&bb, n, "0 B", "0 → \"0 B\"");
+    n = iam_format_bytes(42, &bb, 24);
+    assert_buf_eq(&bb, n, "42 B", "42 → \"42 B\"");
+    n = iam_format_bytes(1023, &bb, 24);
+    assert_buf_eq(&bb, n, "1023 B", "1023 → \"1023 B\" (B boundary)");
+    n = iam_format_bytes(1024, &bb, 24);
+    assert_buf_eq(&bb, n, "1 KiB", "1024 → \"1 KiB\"");
+    n = iam_format_bytes(1500, &bb, 24);
+    assert_buf_eq(&bb, n, "1 KiB", "1500 → \"1 KiB\" (floor)");
+    n = iam_format_bytes(1048576, &bb, 24);
+    assert_buf_eq(&bb, n, "1 MiB", "1 MiB → \"1 MiB\"");
+    n = iam_format_bytes(1073741824, &bb, 24);
+    assert_buf_eq(&bb, n, "1 GiB", "1 GiB → \"1 GiB\"");
+    # 31 GiB shape from the M1+M2 scope preview
+    n = iam_format_bytes(31 * 1073741824, &bb, 24);
+    assert_buf_eq(&bb, n, "31 GiB", "31 GiB → \"31 GiB\" (preview match)");
+    n = iam_format_bytes(1099511627776, &bb, 24);
+    assert_buf_eq(&bb, n, "1 TiB", "1 TiB → \"1 TiB\"");
+    # Negative input → error signal (blen 0)
+    n = iam_format_bytes(0 - 1, &bb, 24);
+    assert_eq(n, 0, "negative bytes → 0 (probe-fail signal)");
+    # cap-too-small → 0
+    n = iam_format_bytes(31 * 1073741824, &bb, 5);
+    assert_eq(n, 0, "cap=5 for \"31 GiB\" rejects");
+
+    # ----- iam_format_uptime -----------------------------------------
+    test_group("uptime.cyr — iam_format_uptime");
+    var ut[24];
+    n = iam_format_uptime(0, &ut, 24);
+    assert_buf_eq(&ut, n, "<1m", "0 → \"<1m\" (fresh-boot fallback)");
+    n = iam_format_uptime(59, &ut, 24);
+    assert_buf_eq(&ut, n, "<1m", "59s → \"<1m\"");
+    n = iam_format_uptime(60, &ut, 24);
+    assert_buf_eq(&ut, n, "1m", "60s → \"1m\"");
+    n = iam_format_uptime(180, &ut, 24);
+    assert_buf_eq(&ut, n, "3m", "180s → \"3m\"");
+    n = iam_format_uptime(3600, &ut, 24);
+    assert_buf_eq(&ut, n, "1h", "3600s → \"1h\" (mins-elision)");
+    n = iam_format_uptime(3600 + 180, &ut, 24);
+    assert_buf_eq(&ut, n, "1h 3m", "3780s → \"1h 3m\"");
+    n = iam_format_uptime(86400, &ut, 24);
+    assert_buf_eq(&ut, n, "1d", "86400s → \"1d\" (hours+mins-elision)");
+    n = iam_format_uptime(86400 + 7200 + 180, &ut, 24);
+    assert_buf_eq(&ut, n, "1d 2h 3m", "preview-shape: 1d 2h 3m");
+    n = iam_format_uptime(2 * 86400 + 60, &ut, 24);
+    assert_buf_eq(&ut, n, "2d 1m", "elide-zero-hours: 2d 1m");
+    # cap-too-small short-circuits
+    n = iam_format_uptime(86400 + 7200 + 180, &ut, 3);
+    assert_eq(n, 0, "cap=3 for \"1d 2h 3m\" rejects");
+
     return assert_summary();
 }
 

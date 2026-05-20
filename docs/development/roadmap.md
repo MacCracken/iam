@@ -30,24 +30,18 @@ shape; mihi 1.0 dep pinned.
 - `./build/iam` prints scaffold version and exits
 - Doc-tree per [first-party-documentation.md](https://github.com/MacCracken/agnosticos/blob/main/docs/development/planning/first-party-documentation.md)
 
-### M1 — Pin mihi + display CPU/RAM/kernel (v0.2.0)
+### M1+M2 — Pin mihi + six display lines (v0.3.0) — ✅ shipped 2026-05-19
 
-The first real output. Depends on mihi M1 shipping the first batch of
-real probes.
+Collapsed into one cut: mihi was already at 0.7.0 (past M3's gate)
+by the time iam reached M1, so the M1 (CPU/RAM/kernel) and M2
+(host/distro/uptime) line sets shipped together.
 
-- `[deps.mihi]` block in `cyrius.cyml`, pinned to mihi v0.2.0
-- Display lines: `CPU: <model>`, `Memory: <total>`, `Kernel: <name> <version>`
-- Pipe-aware: identical output on TTY and pipe (no color yet)
-- Tests: happy path on the maintainer's box + mihi-returns-0 (probe failed) → display "unknown"
-- **Dep gate**: mihi ≥ 0.2.0
-- **Acceptance**: `iam` on archaemenid prints three lines with correct values.
-
-### M2 — Host identity lines (v0.3.0)
-
-- Display lines: `Host: <hostname>`, `Distro: <pretty-name>`, `Uptime: <human-format>`
-- Uptime formatter: seconds → `1d 2h 3m` style (Cyrius-inline; not a dep)
-- **Dep gate**: mihi ≥ 0.3.0
-- **Acceptance**: `iam` on archaemenid prints six lines total with correct values.
+- `[deps.mihi]` pinned to 0.7.0; `[deps.ai-hwaccel]` 2.2.6 pulled in
+  transitively (mihi/gpu.cyr references inside `dist/mihi.cyr`).
+- Display lines: `CPU`, `Memory`, `Kernel`, `Host`, `Distro`, `Uptime`.
+- Pipe-aware: identical output on TTY and pipe (no color emitted).
+- Tests cover formatter logic (51 assertions); end-to-end probe
+  wiring verified by running `./build/iam` on the maintainer's box.
 
 ### M3 — GPU line (v0.4.0)
 

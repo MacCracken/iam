@@ -1,0 +1,77 @@
+# iam — seconds → human-uptime formatter.
+#
+# Format `secs` into `buf` (recommend cap=24) as "<d>d <h>h <m>m",
+# with zero-fields elided and single-space separation:
+#
+#   86400+7200+180 → "1d 2h 3m"
+#   7200+180       → "2h 3m"
+#   180            → "3m"
+#   <60            → "<1m"
+#
+# Drops sub-minute resolution by design — this is the MOTD line, not
+# a stopwatch. The "<1m" floor avoids the awkward "0m" rendering for
+# fresh boots and also serves as the unknown-but-positive fallback
+# when mihi_uptime_secs returns 0 (probe parse-fail returns -1, which
+# the caller maps to the "(unknown)" sentinel before reaching here).
+#
+# Returns bytes written; 0 on cap-too-small. Relies on iam_uint_into
+# (display.cyr) — display.cyr must be included first.
+
+fn iam_format_uptime(secs, buf, cap): i64 {
+    if (cap < 4) { return 0; }
+    if (secs < 60) {
+        store8(buf, 60);      # '<'
+        store8(buf + 1, 49);  # '1'
+        store8(buf + 2, 109); # 'm'
+        return 3;
+    }
+    var days = secs / 86400;
+    var rem = secs - days * 86400;
+    var hours = rem / 3600;
+    rem = rem - hours * 3600;
+    var mins = rem / 60;
+
+    var pos = 0;
+    var n = 0;
+    if (days > 0) {
+        n = iam_uint_into(buf + pos, cap - pos, days);
+        if (n <= 0) { return 0; }
+        pos = pos + n;
+        if (pos >= cap) { return 0; }
+        store8(buf + pos, 100); # 'd'
+        pos = pos + 1;
+    }
+    if (hours > 0) {
+        if (pos > 0) {
+            if (pos >= cap) { return 0; }
+            store8(buf + pos, 32);
+            pos = pos + 1;
+        }
+        n = iam_uint_into(buf + pos, cap - pos, hours);
+        if (n <= 0) { return 0; }
+        pos = pos + n;
+        if (pos >= cap) { return 0; }
+        store8(buf + pos, 104); # 'h'
+        pos = pos + 1;
+    }
+    if (mins > 0) {
+        if (pos > 0) {
+            if (pos >= cap) { return 0; }
+            store8(buf + pos, 32);
+            pos = pos + 1;
+        }
+        n = iam_uint_into(buf + pos, cap - pos, mins);
+        if (n <= 0) { return 0; }
+        pos = pos + n;
+        if (pos >= cap) { return 0; }
+        store8(buf + pos, 109); # 'm'
+        pos = pos + 1;
+    }
+    if (pos == 0) {
+        store8(buf, 60);
+        store8(buf + 1, 49);
+        store8(buf + 2, 109);
+        return 3;
+    }
+    return pos;
+}
