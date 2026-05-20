@@ -1,10 +1,14 @@
-# iam test suite — formatter logic.
+# iam test suite — formatter logic + ADR-contract byte-exact tests.
 #
 # Includes the formatter sources directly (not src/main.cyr — that
 # file's module-level `var r = main(); syscall(...)` would run iam
 # before any assertions). End-to-end probe wiring is exercised by
 # running ./build/iam in CI / by hand; here we cover pure-function
 # layout logic against fixed inputs.
+#
+# Byte-exact tests against synthetic values (no mihi probes) are
+# the executable form of docs/adr/0001-output-shape.md. Any change
+# to the contract has to land here and in the ADR or both.
 #
 # Stdlib auto-included via cyrius.cyml.
 
@@ -105,6 +109,119 @@ fn main() {
     # cap-too-small short-circuits
     n = iam_format_uptime(86400 + 7200 + 180, &ut, 3);
     assert_eq(n, 0, "cap=3 for \"1d 2h 3m\" rejects");
+
+    # ----- iam_render — per-label padding ----------------------------
+    # ADR 0001 §1: every line has an 8-byte label column. Each of the
+    # seven labels gets its own assertion to lock the pad width
+    # against accidental drift.
+    test_group("display.cyr — iam_render label column (ADR 0001 §1)");
+    var rb[256];
+    n = iam_render(&rb, 256, "CPU", "Intel Core i9");
+    assert_buf_eq(&rb, n, "CPU:    Intel Core i9\n", "CPU label: 4 pad spaces");
+    n = iam_render(&rb, 256, "Memory", "16 GiB");
+    assert_buf_eq(&rb, n, "Memory: 16 GiB\n", "Memory label: 1 pad space");
+    n = iam_render(&rb, 256, "Kernel", "Linux 7.0");
+    assert_buf_eq(&rb, n, "Kernel: Linux 7.0\n", "Kernel label: 1 pad space");
+    n = iam_render(&rb, 256, "Host", "testbox");
+    assert_buf_eq(&rb, n, "Host:   testbox\n", "Host label: 3 pad spaces");
+    n = iam_render(&rb, 256, "Distro", "Arch Linux");
+    assert_buf_eq(&rb, n, "Distro: Arch Linux\n", "Distro label: 1 pad space");
+    n = iam_render(&rb, 256, "Uptime", "1h 2m");
+    assert_buf_eq(&rb, n, "Uptime: 1h 2m\n", "Uptime label: 1 pad space");
+    n = iam_render(&rb, 256, "GPU", "AMD Radeon");
+    assert_buf_eq(&rb, n, "GPU:    AMD Radeon\n", "GPU label: 4 pad spaces");
+
+    # ----- iam_render — unknown fallback (ADR 0001 §4) ---------------
+    # Probe returned 0 (null cstring) → emit "(unknown)" in value
+    # column. Required-label lines are NEVER suppressed on probe
+    # failure; the contract is "always six lines, always in order".
+    test_group("display.cyr — iam_render unknown fallback (ADR 0001 §4)");
+    n = iam_render(&rb, 256, "CPU", 0);
+    assert_buf_eq(&rb, n, "CPU:    (unknown)\n", "CPU + value=0 → (unknown)");
+    n = iam_render(&rb, 256, "Memory", 0);
+    assert_buf_eq(&rb, n, "Memory: (unknown)\n", "Memory + value=0 → (unknown)");
+    n = iam_render(&rb, 256, "Host", 0);
+    assert_buf_eq(&rb, n, "Host:   (unknown)\n", "Host + value=0 → (unknown)");
+
+    # ----- iam_render — overflow signaling ---------------------------
+    test_group("display.cyr — iam_render overflow");
+    var sb[10];
+    n = iam_render(&sb, 10, "CPU", "TooLongForThisBuffer");
+    assert_eq(n, 0 - 1, "cap=10 overflow returns -1");
+
+    # ----- iam_render_buf — buf+len value variant --------------------
+    test_group("display.cyr — iam_render_buf");
+    var memval = "59 GiB";
+    n = iam_render_buf(&rb, 256, "Memory", memval, 6);
+    assert_buf_eq(&rb, n, "Memory: 59 GiB\n", "Memory: buf+len value");
+    # vlen=0 → unknown fallback (formatter signal)
+    n = iam_render_buf(&rb, 256, "Uptime", memval, 0);
+    assert_buf_eq(&rb, n, "Uptime: (unknown)\n", "Uptime + vlen=0 → unknown");
+    # vlen<0 same signal
+    n = iam_render_buf(&rb, 256, "Memory", memval, 0 - 1);
+    assert_buf_eq(&rb, n, "Memory: (unknown)\n", "Memory + vlen=-1 → unknown");
+
+    # ----- iam_render_kernel — two-cstring join ---------------------
+    test_group("display.cyr — iam_render_kernel");
+    n = iam_render_kernel(&rb, 256, "Kernel", "Linux", "7.0.5-arch1-1");
+    assert_buf_eq(&rb, n, "Kernel: Linux 7.0.5-arch1-1\n",
+                  "kernel: name + ' ' + version");
+    # name=0 → unknown
+    n = iam_render_kernel(&rb, 256, "Kernel", 0, "7.0.5");
+    assert_buf_eq(&rb, n, "Kernel: (unknown)\n", "kernel name=0 → unknown");
+    # version=0 → unknown
+    n = iam_render_kernel(&rb, 256, "Kernel", "Linux", 0);
+    assert_buf_eq(&rb, n, "Kernel: (unknown)\n", "kernel version=0 → unknown");
+
+    # ----- Full ADR-contract output (ADR 0001 §2) -------------------
+    # Six-line canonical shape — every required label in order, no
+    # GPU line. Mirrors what `./build/iam` emits on a GPU-less box.
+    test_group("display.cyr — ADR-contract assembled output (six lines)");
+    var out[1024];
+    var pos = 0;
+    var r6 = iam_render(&out + pos, 1024 - pos, "CPU", "Test CPU");
+    pos = pos + r6;
+    r6 = iam_render_buf(&out + pos, 1024 - pos, "Memory", "16 GiB", 6);
+    pos = pos + r6;
+    r6 = iam_render_kernel(&out + pos, 1024 - pos, "Kernel", "Linux", "1.0.0");
+    pos = pos + r6;
+    r6 = iam_render(&out + pos, 1024 - pos, "Host", "testbox");
+    pos = pos + r6;
+    r6 = iam_render(&out + pos, 1024 - pos, "Distro", "Test OS");
+    pos = pos + r6;
+    r6 = iam_render_buf(&out + pos, 1024 - pos, "Uptime", "1d 2h 3m", 8);
+    pos = pos + r6;
+    var six_line = "CPU:    Test CPU\nMemory: 16 GiB\nKernel: Linux 1.0.0\nHost:   testbox\nDistro: Test OS\nUptime: 1d 2h 3m\n";
+    assert_buf_eq(&out, pos, six_line, "six-line ADR-contract assembly");
+
+    # Seven-line variant — GPU line appended at position 7.
+    test_group("display.cyr — ADR-contract assembled output (seven lines)");
+    var r7 = iam_render(&out + pos, 1024 - pos, "GPU", "Test GPU");
+    pos = pos + r7;
+    var seven_line = "CPU:    Test CPU\nMemory: 16 GiB\nKernel: Linux 1.0.0\nHost:   testbox\nDistro: Test OS\nUptime: 1d 2h 3m\nGPU:    Test GPU\n";
+    assert_buf_eq(&out, pos, seven_line, "seven-line ADR-contract assembly");
+
+    # ----- Degraded-probe assembled output --------------------------
+    # All-probe-failure scenario: every required line renders as
+    # `(unknown)`, GPU line is suppressed (ngpu==0). Locks the
+    # "never a blank line, never a stderr error" guarantee.
+    test_group("display.cyr — degraded-probe output");
+    var dout[1024];
+    var dpos = 0;
+    var dr = iam_render(&dout + dpos, 1024 - dpos, "CPU", 0);
+    dpos = dpos + dr;
+    dr = iam_render_buf(&dout + dpos, 1024 - dpos, "Memory", dout, 0);
+    dpos = dpos + dr;
+    dr = iam_render(&dout + dpos, 1024 - dpos, "Kernel", 0);
+    dpos = dpos + dr;
+    dr = iam_render(&dout + dpos, 1024 - dpos, "Host", 0);
+    dpos = dpos + dr;
+    dr = iam_render(&dout + dpos, 1024 - dpos, "Distro", 0);
+    dpos = dpos + dr;
+    dr = iam_render_buf(&dout + dpos, 1024 - dpos, "Uptime", dout, 0);
+    dpos = dpos + dr;
+    var degraded = "CPU:    (unknown)\nMemory: (unknown)\nKernel: (unknown)\nHost:   (unknown)\nDistro: (unknown)\nUptime: (unknown)\n";
+    assert_buf_eq(&dout, dpos, degraded, "all-probe-failure six-line shape");
 
     return assert_summary();
 }

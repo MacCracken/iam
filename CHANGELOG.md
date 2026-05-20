@@ -6,10 +6,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.5.0] — 2026-05-19
 
-M4 — output-shape ADR. The bytes iam emits are now a written
-contract, not just folklore. No source code changes; this release
-codifies decisions already shipped in v0.3.0 and v0.4.0 so they
-survive a v1.0 freeze.
+M4 complete — output-shape ADR landed and locked into executable
+form via byte-exact tests. The bytes iam emits are now a written
+contract codified across three surfaces: the ADR doc, the canonical
+sample, and the test suite. M4's three deliverables shipped in one
+cut.
 
 ### Added
 - `docs/adr/0001-output-shape.md` — accepted ADR locking line order,
@@ -19,15 +20,36 @@ survive a v1.0 freeze.
   trail (tab separators, variable label width, color-on-TTY,
   per-GPU lines, JSON output).
 - `docs/examples/sample-output.txt` — canonical sample output
-  captured on archaemenid. Referenced from the ADR; the seed for
-  the byte-exact mihi-mock tests that follow in a later bite.
+  captured on archaemenid. Referenced from the ADR.
 - ADR index updated in `docs/adr/README.md`.
+- 39 byte-exact assertions in `tests/iam.tcyr` covering every ADR
+  §1–§4 case: per-label padding for all seven labels (CPU/Memory/
+  Kernel/Host/Distro/Uptime/GPU), `(unknown)` fallback paths
+  through every renderer variant, full six-line and seven-line
+  assembled output shapes, full all-probes-failed degraded shape.
+  Test count: 51 → 90.
 
-### Deferred
-- Byte-for-byte tests against a fixed mihi-mock input — the third
-  M4 deliverable per the roadmap. Requires either routing
-  `iam_emit` writes through a buffer or building a mock-mihi shim;
-  taken as a separate bite to keep this release pure-documentation.
+### Changed
+- **Renamed renderer family**: `iam_emit` / `iam_emit_buf` /
+  `iam_emit_kernel` → `iam_render` / `iam_render_buf` /
+  `iam_render_kernel`. Renderers now write into a caller-supplied
+  byte buffer and return bytes-written (or `-1` on overflow)
+  instead of issuing per-line `write(2)` syscalls. This makes the
+  ADR contract observable to tests.
+- **Single-flush driver**: `src/main.cyr` now accumulates the full
+  seven-line output into a 4 KiB stack buffer and emits it with
+  one `print(buf, len)` call. Side benefit: fewer syscalls per
+  invocation (one vs ~14 previously) — incidental win against the
+  M5 < 10 ms cold-start target.
+- `iam_render*` helpers consolidate byte-append + bounds-check via
+  two new internal primitives (`iam_put`, `iam_copy`), keeping each
+  renderer body ~15 lines of comprehensible logic.
+
+### Compatibility
+- The renderer rename is iam-internal — no external consumers
+  (iam is a binary, not a library). The output bytes are
+  unchanged; `./build/iam` on the same host emits a byte-identical
+  six-line or seven-line report at v0.4.0 vs v0.5.0.
 
 ## [0.4.0] — 2026-05-19
 

@@ -1,23 +1,26 @@
-# iam — line printer + value formatters.
+# iam — line renderers + value formatters.
 #
-# One emitter, two formatters. Every displayed line routes through
-# `iam_emit` (or `iam_emit_buf`) so the v1.0 output-shape ADR has a
-# single place to lock layout.
+# Renderers write the line contract from
+# docs/adr/0001-output-shape.md into a caller-supplied byte buffer
+# and return the number of bytes written (or 0 - 1 on overflow). One
+# central place to lock layout — the v1.0 contract changes here
+# (and in the ADR) or not at all.
 #
-# Layout contract (informal until M4 lands the ADR):
+# Layout contract (locked at ADR 0001):
 #   "<LABEL>:<padding><VALUE>\n"
-#   - label column is IAM_LABEL_WIDTH bytes wide (label + ':' padded
-#     with spaces). All six current labels fit: longest is "Memory" /
-#     "Distro" / "Uptime" / "Kernel" (6 chars + ':' + 1 space = 8).
-#   - value column runs to EOL.
-#   - missing value (probe returned null/negative) renders as
-#     IAM_UNKNOWN_TEXT — never an error to stderr, never an empty
-#     line. iam is a presentation surface; mihi owns probe failure.
+#   - label column is IAM_LABEL_WIDTH bytes wide (label + ':'
+#     padded with spaces). Longest label is "Memory" / "Kernel" /
+#     "Distro" / "Uptime" (6 chars + ':' + 1 space = 8).
+#   - value runs to '\n'.
+#   - missing value (null/negative probe return) renders as
+#     IAM_UNKNOWN_TEXT — never a stderr error, never a blank line,
+#     never a suppressed required-label line.
 #
-# Buffer-write helpers (`iam_format_bytes`, `iam_format_uptime` in
-# uptime.cyr) return byte counts rather than cstring pointers because
-# the formatter writes into a caller-owned scratch buffer; pairing
-# them with `iam_emit_buf` skips a null-terminate step.
+# Why buffer-returning, not stdout-writing: the ADR's byte contract
+# is testable against synthetic inputs only if the renderer's output
+# is observable. Tests build a buffer, run the renderer, compare
+# bytes. Driver (main.cyr) accumulates all lines in one buffer and
+# flushes with a single syscall — also faster (one write vs many).
 
 enum IamLayout {
     IAM_LABEL_WIDTH = 8;
@@ -29,65 +32,116 @@ enum IamLayout {
 var IAM_UNKNOWN_TEXT = "(unknown)";
 var IAM_UNKNOWN_LEN  = 9;
 
-# Emit "<label>:<padding><value>\n". `label` is a bare cstring like
-# "CPU" (no trailing colon); `value` is the probe result. value=0
-# means probe failure → emit IAM_UNKNOWN_TEXT.
-fn iam_emit(label, value): i64 {
+# Append byte `c` at offset `pos` in buffer `out` (capacity `cap`).
+# Returns new pos, or 0 - 1 on overflow. Pure helper; lets the
+# renderers stay readable.
+fn iam_put(out, cap, pos, c): i64 {
+    if (pos >= cap) { return 0 - 1; }
+    store8(out + pos, c);
+    return pos + 1;
+}
+
+# Copy `len` bytes from `src` into `out` starting at `pos`. Returns
+# new pos, or 0 - 1 on overflow. Used by every renderer to lay down
+# labels, values, padding, and the trailing newline.
+fn iam_copy(out, cap, pos, src, len): i64 {
+    if (pos + len > cap) { return 0 - 1; }
+    var i = 0;
+    while (i < len) {
+        store8(out + pos + i, load8(src + i));
+        i = i + 1;
+    }
+    return pos + len;
+}
+
+# Render "<label>:<pad><value>\n" into `out` (capacity `cap`).
+# `label` is a cstring like "CPU"; `value` is the probe result.
+# value=0 means probe failure → emit IAM_UNKNOWN_TEXT in the value
+# column. Returns bytes written, or 0 - 1 on overflow (caller can
+# stop accumulating; the partial bytes written are still valid
+# prefix).
+fn iam_render(out, cap, label, value): i64 {
     var llen = strlen(label);
-    print(label, llen);
-    print(":", 1);
+    var pos = iam_copy(out, cap, 0, label, llen);
+    if (pos < 0) { return 0 - 1; }
+    pos = iam_put(out, cap, pos, 58);  # ':'
+    if (pos < 0) { return 0 - 1; }
     var pad = IAM_LABEL_WIDTH - llen - 1;
     if (pad < 1) { pad = 1; }
-    fmt_pad(pad);
-    if (value == 0) {
-        print(IAM_UNKNOWN_TEXT, IAM_UNKNOWN_LEN);
-        print("\n", 1);
-    } else {
-        println(value);
+    while (pad > 0) {
+        pos = iam_put(out, cap, pos, 32);
+        if (pos < 0) { return 0 - 1; }
+        pad = pad - 1;
     }
-    return 0;
+    if (value == 0) {
+        pos = iam_copy(out, cap, pos, IAM_UNKNOWN_TEXT, IAM_UNKNOWN_LEN);
+    } else {
+        var vlen = strlen(value);
+        pos = iam_copy(out, cap, pos, value, vlen);
+    }
+    if (pos < 0) { return 0 - 1; }
+    pos = iam_put(out, cap, pos, 10);  # '\n'
+    if (pos < 0) { return 0 - 1; }
+    return pos;
 }
 
 # Variant for pre-formatted values held in a byte buffer (no NUL
 # terminator). Used by the byte-size and uptime formatters whose
-# outputs live in caller-owned scratch buffers. `blen <= 0` is the
+# outputs live in caller-owned scratch buffers. `vlen <= 0` is the
 # "formatter failed" signal — render as unknown.
-fn iam_emit_buf(label, buf, blen): i64 {
+fn iam_render_buf(out, cap, label, valbuf, vlen): i64 {
     var llen = strlen(label);
-    print(label, llen);
-    print(":", 1);
+    var pos = iam_copy(out, cap, 0, label, llen);
+    if (pos < 0) { return 0 - 1; }
+    pos = iam_put(out, cap, pos, 58);
+    if (pos < 0) { return 0 - 1; }
     var pad = IAM_LABEL_WIDTH - llen - 1;
     if (pad < 1) { pad = 1; }
-    fmt_pad(pad);
-    if (blen <= 0) {
-        print(IAM_UNKNOWN_TEXT, IAM_UNKNOWN_LEN);
-        print("\n", 1);
-    } else {
-        print(buf, blen);
-        print("\n", 1);
+    while (pad > 0) {
+        pos = iam_put(out, cap, pos, 32);
+        if (pos < 0) { return 0 - 1; }
+        pad = pad - 1;
     }
-    return 0;
+    if (vlen <= 0) {
+        pos = iam_copy(out, cap, pos, IAM_UNKNOWN_TEXT, IAM_UNKNOWN_LEN);
+    } else {
+        pos = iam_copy(out, cap, pos, valbuf, vlen);
+    }
+    if (pos < 0) { return 0 - 1; }
+    pos = iam_put(out, cap, pos, 10);
+    if (pos < 0) { return 0 - 1; }
+    return pos;
 }
 
-# Specialised kernel-line emitter: two adjoining cstrings (name,
+# Specialised kernel-line renderer: two adjoining cstrings (name,
 # version) — typically pointers into the same uts buffer — joined
-# with a single space. Avoids allocating a scratch buffer for the
-# common case where both probes succeed.
-fn iam_emit_kernel(label, name, version): i64 {
+# with a single space. Either argument being 0 routes through the
+# unknown fallback (consistent with ADR 0001).
+fn iam_render_kernel(out, cap, label, name, version): i64 {
     if (name == 0 || version == 0) {
-        iam_emit(label, 0);
-        return 0;
+        return iam_render(out, cap, label, 0);
     }
     var llen = strlen(label);
-    print(label, llen);
-    print(":", 1);
+    var pos = iam_copy(out, cap, 0, label, llen);
+    if (pos < 0) { return 0 - 1; }
+    pos = iam_put(out, cap, pos, 58);
+    if (pos < 0) { return 0 - 1; }
     var pad = IAM_LABEL_WIDTH - llen - 1;
     if (pad < 1) { pad = 1; }
-    fmt_pad(pad);
-    print(name, strlen(name));
-    print(" ", 1);
-    println(version);
-    return 0;
+    while (pad > 0) {
+        pos = iam_put(out, cap, pos, 32);
+        if (pos < 0) { return 0 - 1; }
+        pad = pad - 1;
+    }
+    pos = iam_copy(out, cap, pos, name, strlen(name));
+    if (pos < 0) { return 0 - 1; }
+    pos = iam_put(out, cap, pos, 32);
+    if (pos < 0) { return 0 - 1; }
+    pos = iam_copy(out, cap, pos, version, strlen(version));
+    if (pos < 0) { return 0 - 1; }
+    pos = iam_put(out, cap, pos, 10);
+    if (pos < 0) { return 0 - 1; }
+    return pos;
 }
 
 # Write decimal `n` (>= 0) into `buf` starting at offset 0. Returns

@@ -5,10 +5,10 @@
 
 ## Version
 
-**0.5.0** — shipped 2026-05-19. M4 ADR landed: the bytes iam emits
-are now a written contract. No source changes from v0.4.0; output
-shape is still six required lines (CPU / Memory / Kernel / Host /
-Distro / Uptime) + optional GPU.
+**0.5.0** — shipped 2026-05-19. M4 complete: the bytes iam emits
+are a written contract (ADR 0001) locked into executable form via
+39 byte-exact tests. Renderers refactored to write-into-buffer;
+driver flushes the whole report with a single syscall.
 
 ## Toolchain
 
@@ -25,16 +25,16 @@ No flags planned for v1.0 beyond standard `--help` / `--version`.
 ## Source
 
 - `src/main.cyr` — driver: opens the shared uts buffer, calls the
-  six mihi probes, emits lines via `src/display.cyr` /
-  `src/uptime.cyr` helpers.
-- `src/display.cyr` — `iam_emit` / `iam_emit_buf` / `iam_emit_kernel`
-  line printers, `iam_format_bytes` (binary units, floor),
-  `iam_uint_into` shared digit helper.
+  mihi probes, accumulates rendered lines into a 4 KiB stack
+  buffer, flushes once. Optional GPU line is inlined here (single
+  probe, single line, suppress-on-zero).
+- `src/display.cyr` — `iam_render` / `iam_render_buf` /
+  `iam_render_kernel` line renderers (write-into-buffer, return
+  bytes-written), `iam_format_bytes` (binary units, floor),
+  `iam_uint_into` shared digit helper, `iam_put` / `iam_copy`
+  internal append+bounds primitives.
 - `src/uptime.cyr` — `iam_format_uptime` (seconds → "1d 2h 3m" with
   zero-elision + `<1m` floor).
-
-GPU line is inlined in `main.cyr` (single probe, single line,
-suppress-on-zero — too small to deserve its own module).
 
 ## Output
 
@@ -69,15 +69,20 @@ freezes at v1.0):
 
 ## Tests
 
-- `tests/iam.tcyr` — 51 assertions covering `iam_uint_into`,
-  `iam_format_bytes` (boundary + floor + preview cases),
-  `iam_format_uptime` (zero-elision, fresh-boot floor, cap-too-small).
+- `tests/iam.tcyr` — 90 assertions:
+  - Formatter logic (51): `iam_uint_into`, `iam_format_bytes`
+    (boundary + floor + preview cases), `iam_format_uptime`
+    (zero-elision, fresh-boot floor, cap-too-small).
+  - ADR-contract byte-exact (39): per-label padding for all seven
+    labels, `(unknown)` fallback paths through every renderer
+    variant, full six-line + seven-line assembled output, full
+    all-probes-failed degraded shape.
 - `tests/iam.bcyr` — benchmark stub (`noop` micro-bench).
 - `tests/iam.fcyr` — fuzz stub.
 
 End-to-end probe wiring is verified by building the binary and
 running it on the maintainer's box (archaemenid). The byte-exact
-output assertions land at M4 with the mihi-mock harness.
+suite covers the ADR contract executable-form for synthetic inputs.
 
 ## Dependencies
 
@@ -102,13 +107,10 @@ invocations and shell login scripts.
 
 ## Next
 
-See [`roadmap.md`](roadmap.md). With M4 ADR in the can, the next
-named milestone is:
+See [`roadmap.md`](roadmap.md). With M4 fully in the can, the
+remaining roadmap is:
 
-- **M4 follow-up** (separate bite) — byte-exact tests against a
-  fixed mihi-mock input. Locks the ADR contract into executable
-  form. Requires routing `iam_emit` writes through a caller-buffer
-  or building a mihi shim.
 - **M5** — harden + dogfood pass (security audit, cold-start
-  benchmark < 10ms gate, three-point benchmark trend).
+  benchmark < 10ms gate, three-point benchmark trend, maintainer-
+  uses-iam-in-MOTD for one cycle).
 - **M6** — v1.0.0 cut once mihi 1.0 ships.

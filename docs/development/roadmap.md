@@ -56,19 +56,22 @@ by the time iam reached M1, so the M1 (CPU/RAM/kernel) and M2
 - **Acceptance**: `iam` on archaemenid (AMD Ryzen 7 5800H, integrated
   Radeon) prints "GPU: AMD Radeon (PCI 0x1002:0x1638)".
 
-### M4 — Output-shape ADR (v0.5.0) — ✅ ADR + sample shipped 2026-05-19
+### M4 — Output-shape ADR (v0.5.0) — ✅ shipped 2026-05-19
 
-ADR + sample output landed. Byte-exact mihi-mock tests carved out
-as a follow-up bite (smaller refactor work; the ADR codifies
-decisions already in the code).
+All three M4 deliverables in one cut: ADR + sample output + the
+byte-exact test harness (achieved via an `iam_render*` refactor —
+renderers now write into a caller-buffer instead of issuing per-
+line write syscalls, which made the contract observable to tests).
 
 - ✅ ADR: `docs/adr/0001-output-shape.md` — line order, 8-byte label
   column, `(unknown)` fallback, single-optional-GPU rule, no-color
   / pipe-equivalence, exit-0 contract, alternatives-considered.
 - ✅ Sample output captured in `docs/examples/sample-output.txt`.
-- ⏳ Byte-exact tests against fixed mihi-mock input (follow-up bite).
+- ✅ 39 byte-exact tests covering per-label padding, fallback paths,
+  six-/seven-line assembled output, all-probes-failed degraded.
 - **Dep gate**: none (decision is local).
-- **Acceptance**: ADR landed; sample output reproducible across runs.
+- **Acceptance**: ADR landed; sample output reproducible across
+  runs; test suite executes the contract on synthetic inputs.
 
 ### M5 — Harden + dogfood (v0.9.0)
 
