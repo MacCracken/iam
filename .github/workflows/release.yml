@@ -12,6 +12,16 @@ on:
 permissions:
   contents: write
 
+# Serialize runs per tag so a double tag-push (or workflow re-run)
+# can't spawn two parallel softprops invocations that each create a
+# draft release for the same tag and race each other's asset cleanup.
+# Per-tag scope — different tags don't block each other. Queue (not
+# cancel) so an in-flight upload finishes cleanly before the second
+# run hits the existing-release path.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # ────────────────────────────────────────────────────────────────
   # Gate — full CI must pass before anything builds for release.
