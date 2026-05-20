@@ -123,14 +123,42 @@ jobs:
         # as dead. This is high-value for iam specifically because
         # most of the dep surface is unused.
         run: |
+          # Layout: rc-capture pattern throughout so a binary failure
+          # produces diagnostics rather than a silent step-exit. The
+          # 2026-05-19 incident: no-GPU hosted runner caused iam-dce
+          # to exit 1 silently (zero stderr), which under `set -e`
+          # killed the step with no useful signal. The capture-then-
+          # report flow below survives that case.
+          set -x
           CYRIUS_DCE=1 cyrius build src/main.cyr build/iam-dce
           echo "iam:     $(wc -c < build/iam) bytes"
           echo "iam-dce: $(wc -c < build/iam-dce) bytes"
-          ./build/iam-dce > /tmp/iam-dce.out
+          echo "--- file metadata ---"
+          ls -la build/iam build/iam-dce
+          file build/iam-dce || true
+
+          # Run iam-dce, capture rc + stdout + stderr separately so
+          # we see every signal even when the binary exits non-zero.
+          rc=0
+          ./build/iam-dce > /tmp/iam-dce.out 2> /tmp/iam-dce.err || rc=$?
+          echo "--- iam-dce exit code ---"
+          echo "rc=$rc"
+          echo "--- iam-dce stdout ($(wc -c < /tmp/iam-dce.out) bytes, $(wc -l < /tmp/iam-dce.out) lines) ---"
+          cat /tmp/iam-dce.out
+          echo "--- iam-dce stderr ($(wc -c < /tmp/iam-dce.err) bytes) ---"
+          cat /tmp/iam-dce.err
+
+          # Hard fail on non-zero binary exit. The diagnostics above
+          # are what makes the failure investigatable; we still want
+          # the step red so a broken DCE'd binary can't slip past.
+          if [ $rc -ne 0 ]; then
+            echo "FAIL: ./build/iam-dce exited non-zero (rc=$rc)"
+            exit 1
+          fi
+
           lines=$(wc -l < /tmp/iam-dce.out)
           if [ "$lines" -lt 6 ] || [ "$lines" -gt 7 ]; then
             echo "FAIL: DCE'd binary output line count ($lines) not in {6,7}"
-            cat /tmp/iam-dce.out
             exit 1
           fi
           # Byte-equal value half is runner-dependent — only labels
@@ -141,7 +169,6 @@ jobs:
           for label in CPU Memory Kernel Host Distro Uptime; do
             grep -qE "^${label}:" /tmp/iam-dce.out || {
               echo "FAIL: DCE output missing '${label}:' line"
-              cat /tmp/iam-dce.out
               exit 1
             }
           done
@@ -149,8 +176,16 @@ jobs:
           # the two builds. If non-DCE detected an accelerator, the
           # DCE'd binary had better detect the same one (would prove
           # DCE didn't drop a live mihi_gpu_* call path).
-          gpu_main=$(grep -c '^GPU:' /tmp/iam.out)
-          gpu_dce=$(grep -c '^GPU:' /tmp/iam-dce.out)
+          #
+          # `|| true` is load-bearing: `grep -c` exits 1 on zero
+          # matches even though it prints "0" to stdout. Under
+          # `set -e` (GHA default), `var=$(grep -c ...)` propagates
+          # the inner exit code and kills the step — which is what
+          # happens on a no-GPU runner where both files have zero
+          # `^GPU:` lines. The trailing `|| true` swallows the exit
+          # while still capturing the printed count.
+          gpu_main=$(grep -c '^GPU:' /tmp/iam.out || true)
+          gpu_dce=$(grep -c '^GPU:' /tmp/iam-dce.out || true)
           if [ "$gpu_main" != "$gpu_dce" ]; then
             echo "FAIL: GPU-line presence diverges (main=$gpu_main, DCE=$gpu_dce)"
             echo "--- main ---"; cat /tmp/iam.out
