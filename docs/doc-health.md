@@ -6,7 +6,7 @@ type: state
 
 # Documentation Health — iam
 
-> **Last refresh**: 2026-05-19 (v0.8.0 cut — ADR 0002 accepted, output-shape reordered to identity → runtime → hardware spine; ❓ Open strategic question closed). Tree is 14 markdown docs + the canonical root files; every row currently reads ✅ Fresh because the v0.5.0 → v0.6.0 → v0.7.0 → v0.8.0 cuts touched every doc that mentions version, audit, output shape, or roadmap state. No open strategic questions outstanding. **Prior refresh**: 2026-05-19 v0.7.0 — initial scaffold, M5.5 audit closeout. | **Refresh cadence**: when docs are touched, update the affected row.
+> **Last refresh**: 2026-05-19 (v0.9.0 RC cut — F-001 sanitizer landed, follow-up audit filed, **no remaining v1.0 blockers on the iam side**; only external gate is mihi 1.0 ship). Tree is 15 markdown docs + the canonical root files; every row currently reads ✅ Fresh. **Prior refresh**: 2026-05-19 v0.8.0 — ADR 0002 accepted, output-shape reorder. **Prior**: 2026-05-19 v0.7.0 — initial scaffold, M5.5 audit closeout. | **Refresh cadence**: when docs are touched, update the affected row.
 > **Scope**: This repo only (`iam`) — the entire `docs/` tree plus root-level files (README, CHANGELOG, CLAUDE.md, VERSION, cyrius.cyml, cyrius.lock, SECURITY.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, LICENSE). Mihi's docs live in the mihi repo and are not audited here; cross-repo dep state is captured in [`development/state.md`](development/state.md), not here.
 >
 > **Convention adopted from cyrius / agnosticos** (2026-05-19): same tier-table shape, scaled to iam's much smaller tree (~14 markdown docs vs cyrius's ~105). One ledger row per doc; rewrite-in-place as docs change.
@@ -15,24 +15,29 @@ This is a **ledger**, not a one-time audit. Rewrite-in-place as docs change.
 
 ---
 
-## At a glance — 2026-05-19 inventory (v0.8.0 cut)
+## At a glance — 2026-05-19 inventory (v0.9.0 RC cut)
 
-**14 markdown docs** under `docs/` + 9 root-level files (README, CHANGELOG, CLAUDE.md, SECURITY.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, VERSION, cyrius.cyml, cyrius.lock). Bucket counts:
+**15 markdown docs** under `docs/` (+1 since v0.8.0: the v0.9.0
+audit doc) + 9 root-level files (README, CHANGELOG, CLAUDE.md,
+SECURITY.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, VERSION,
+cyrius.cyml, cyrius.lock). Bucket counts:
 
 | Bucket | Count | What it means |
 |---|---|---|
-| ✅ **Fresh / touched in current cycle** | 19 | All operational + root docs were touched across the v0.5.0 → v0.8.0 arc (state.md / roadmap.md / CHANGELOG / VERSION / both audit docs / benchmarks.md / ADR 0001 (now Superseded) / ADR 0002 (now Accepted) / sample-output.txt / README / CLAUDE.md / SECURITY.md / etc.). |
+| ✅ **Fresh / touched in current cycle** | 20 | All operational + root docs touched across the v0.5.0 → v0.9.0 arc (state.md / roadmap.md / CHANGELOG / VERSION / three audit docs / benchmarks.md / ADR 0001 (Superseded) / ADR 0002 (Accepted) / sample-output.txt / README / CLAUDE.md / SECURITY.md / etc.). |
 | 🟡 **Stale — refresh in place** | 0 | None flagged. |
 | 🟠 **Read-through outstanding** | 0 | None flagged. |
 | 🔵 **Probably evergreen** | 4 | `docs/adr/template.md`, `docs/adr/README.md`, `docs/architecture/README.md`, `CODE_OF_CONDUCT.md` — convention / framing docs; re-read pass at major releases, not weekly. |
 | 📦 **Archive — frozen by design** | 0 | No `docs/development/archive/` directory yet; audit docs are date-stamped artifacts (not in-place refreshed) but live in their `docs/audit/` tier, not an archive. ADR 0001 stays in `docs/adr/` with `Superseded` status — same archive-in-place pattern. |
-| ❓ **Open strategic question** | 0 | **Closed** at v0.8.0 — ADR 0002 accepted (output-shape reorder to identity → runtime → hardware spine). The byte contract is now the v1.0-target shape; F-001 mitigation is the only remaining pre-v1.0 source change. |
+| ❓ **Open strategic question** | 0 | None outstanding. F-001 mitigation closed at v0.9.0; mihi 1.0 ship is an external dependency, not a strategic question. |
 
 **Why now**: iam's doc tree has been actively maintained since scaffold (every release cuts a state.md refresh and a CHANGELOG entry per CLAUDE.md), but the *aggregate* currency had no surface. This file is that surface — same convention cyrius, agnosticos, and the rest of the first-party set use.
 
-**2026-05-19 sweep notes (v0.8.0 cut)**: ADR 0002 accepted in this cut — output-shape reorder lands. Doc-side effect: ADR 0001 status → `Superseded by 0002`; ADR 0002 status → `Accepted`; `docs/examples/sample-output.txt` regenerated; `docs/development/state.md` *Shape* and *Output* sections rewritten for the new spine; `tests/iam.tcyr` byte-exact assertions regenerated. Closes the lone ❓ Open strategic question that the v0.7.0 doc-health scaffold surfaced. No new ❓ entries opened — the next pre-v1.0 source change (F-001 mitigation) is a tracked roadmap item, not a strategic question.
+**2026-05-19 sweep notes (v0.9.0 RC cut)**: F-001 sanitizer landed in this cut — TTY-escape mitigation at the renderer boundary (`iam_copy_value` in `src/display.cyr`). Doc-side effect: new audit doc `2026-05-19-v0.9.0-audit.md` filed superseding M5.5 for the v0.8.0 reorder + v0.9.0 F-001 scope; `docs/benchmarks.md` gains a fourth trend row (1510 µs median, v0.9.0 stays inside the v0.5.0 noise floor) and bumps the toolchain row 6.0.0 → 6.0.1 (resolves the drift the v0.7.0 scaffold flagged); state.md *Version* / *Audit* / *Tests* / *Benchmarks* / *Next* sections refreshed; roadmap M6 marks v0.9.0 RC shipped, mihi 1.0 ship now the only remaining v1.0 gate. **No remaining ❓ Open strategic questions; no v1.0 blockers on the iam side.**
 
-**Prior sweep (2026-05-19, v0.7.0)**: initial scaffold of this file. No drift to retire — every doc was touched within the active 0.5.0 → 0.7.0 milestone-closure arc, and the M5.5 audit cut that day verified zero source drift across the same window.
+**Prior sweep (2026-05-19, v0.8.0)**: ADR 0002 accepted — output-shape reorder to identity → runtime → hardware spine. Closes the lone ❓ that the v0.7.0 scaffold surfaced.
+
+**Prior sweep (2026-05-19, v0.7.0)**: initial scaffold of this file. No drift to retire — every doc was touched within the active 0.5.0 → 0.7.0 milestone-closure arc.
 
 ---
 
@@ -41,16 +46,16 @@ This is a **ledger**, not a one-time audit. Rewrite-in-place as docs change.
 | File | Last touched | Status | Action |
 |---|---|---|---|
 | `README.md` | 2026-05-19 | ✅ Fresh | Top-level project README. Touched at v0.7.0 cut. |
-| `CHANGELOG.md` | 2026-05-19 | ✅ Fresh | **Source of truth per CLAUDE.md.** Through v0.7.0 (M5.5 audit closeout). Refreshed every release. |
+| `CHANGELOG.md` | 2026-05-19 | ✅ Fresh | **Source of truth per CLAUDE.md.** Through v0.9.0 RC (M6 release candidate). Refreshed every release. |
 | `CLAUDE.md` | 2026-05-19 | ✅ Fresh | Process + procedures + project-identity. Volatile state delegated to `docs/development/state.md` per its own principle. |
-| `VERSION` | 2026-05-19 | ✅ Fresh | Single source of truth for version (`0.7.0` at last edit). `cyrius.cyml [package].version = "${file:VERSION}"` auto-tracks. |
+| `VERSION` | 2026-05-19 | ✅ Fresh | Single source of truth for version (`0.9.0` at last edit). `cyrius.cyml [package].version = "${file:VERSION}"` auto-tracks. |
 | `cyrius.cyml` | 2026-05-19 | ✅ Fresh | Manifest. Toolchain pin `6.0.1`; mihi `0.7.0`; ai-hwaccel `2.2.6`. |
 | `cyrius.lock` | 2026-05-19 | ✅ Fresh | Generated artifact. Refreshed by `cyrius deps` whenever pins move. |
 | `SECURITY.md` | 2026-05-19 | ✅ Fresh | Threat-surface summary + reporting address. Threat model matches the M5 / M5.5 audit docs (mihi return-data abuse + TTY escape injection). |
 | `CONTRIBUTING.md` | 2026-05-19 | 🔵 Evergreen | Contribution conventions; touched only when the process changes. |
 | `CODE_OF_CONDUCT.md` | 2026-05-19 | 🔵 Evergreen | Standard COC; rarely changes. |
 | `LICENSE` | 2026-05-19 | 🔵 Evergreen | GPL-3.0-only. Frozen by the license choice. |
-| `docs/benchmarks.md` | 2026-05-19 | ✅ Fresh | Invocation-time benchmark methodology + three-point trend (v0.3.0 → M3@9df0859 → v0.5.0). M5 < 10 ms gate verified at ~1.5 ms on archaemenid. Refresh when a new benchmark run lands or when a perf-relevant change ships. **Note**: header table says "Toolchain: cyrius 6.0.0" while current pin is 6.0.1 — minor drift, refresh at next bench re-run. |
+| `docs/benchmarks.md` | 2026-05-19 | ✅ Fresh | Invocation-time benchmark methodology + four-point trend (v0.3.0 → M3@9df0859 → v0.5.0 → v0.9.0). M5 < 10 ms gate verified at ~1510 µs on archaemenid (6.6× headroom); F-001 sanitizer at v0.9.0 is invisible at this scale. Toolchain row resolved 6.0.0 → 6.0.1 at v0.9.0 (was the doc-health-flagged drift from the v0.7.0 scaffold). Refresh when a new benchmark run lands or a perf-relevant change ships. |
 
 ---
 
@@ -94,10 +99,11 @@ Periodic audit reports; per-audit timestamped (don't refresh in place — supers
 
 | File | Last touched | Status |
 |---|---|---|
-| `2026-05-19-audit.md` | 2026-05-19 | 🔵 Dated artifact — M5 P(-1) audit (v0.5.0 scope). Superseded for the M5.5 scope by the doc below, kept in-place as historical record. |
-| `2026-05-19-m5.5-audit.md` | 2026-05-19 | 🔵 Dated artifact — M5.5 refreshed audit (v0.6.0 scope). Verdict pass, no new findings. CVE/0day dep-tree sweep clean. F-001 still the lone v1.0 blocker; F-002 still accepted-risk INFO. |
+| `2026-05-19-audit.md` | 2026-05-19 | 🔵 Dated artifact — M5 P(-1) audit (v0.5.0 scope). Superseded; kept in-place as historical record. |
+| `2026-05-19-m5.5-audit.md` | 2026-05-19 | 🔵 Dated artifact — M5.5 refreshed audit (v0.6.0/v0.7.0 scope). Superseded by the v0.9.0 doc; kept in-place. |
+| `2026-05-19-v0.9.0-audit.md` | 2026-05-19 | ✅ Fresh — v0.9.0 RC follow-up audit. **Verdict pass; F-001 RESOLVED; F-002 carries INFO; no remaining v1.0 blockers on the iam side.** Section A reviews `iam_copy_value` design + call-site fan-in + 15 byte-exact tests; Section B re-walks src/ against the M5/M5.5 checklist with v0.9.0 line numbers; conclusion names mihi 1.0 as the only external v1.0 gate. |
 
-Per CLAUDE.md *Process P(-1)*: next renewal trigger is F-001 mitigation landing in `src/display.cyr` (first source change since v0.5.0), or a mihi/ai-hwaccel major bump, or the M6 v1.0 cut — whichever comes first.
+Per CLAUDE.md *Process P(-1)*: next renewal trigger is the mihi 1.0 repin (mandatory dep major bump), or any new source change in `src/*.cyr` beyond docstring/comment edits, or the M6 v1.0 cut — whichever comes first.
 
 ---
 
@@ -144,9 +150,10 @@ Items that are *scheduled* doc decisions, not stale state. Surfaced here so they
 | # | Commitment | Trigger | Source | Notes |
 |---|---|---|---|---|
 | 1 | **Per-release state refresh** — `docs/development/state.md` Version / Audit / Next sections refreshed at every release cut per the file's own *"Refreshed every release"* contract. | Every release | [`development/state.md`](development/state.md) header | Manual, alongside `VERSION` + CHANGELOG bump. |
-| 2 | **Periodic audit** — full P(-1) source review + dep-tree CVE sweep before the M6 v1.0 freeze (and on any mihi / ai-hwaccel / cyrius major bump). | Before v1.0; on dep-major bump | [`CLAUDE.md`](../CLAUDE.md) *Process P(-1)* | Most recent: 2026-05-19 (M5 → M5.5). Next trigger: F-001 mitigation landing, since that's the first source change since v0.5.0 — see the M5.5 audit's *Next audit trigger* clause. |
-| 3 | **ADR 0002 resolution** — **CLOSED at v0.8.0 (Accepted)**. Output-shape reorder landed; ADR 0001 §2-§3 superseded; tests regenerated; sample-output regenerated. Row kept for one cycle as historical commitment, removable at next sweep if uneventful. | (resolved) | [`adr/0002-output-shape-reorder.md`](adr/0002-output-shape-reorder.md) | Closed. |
-| 4 | **Benchmark refresh** — re-run the bench harness against current `build/iam` whenever a perf-relevant change ships (F-001 sanitizer pass is a candidate — adds a per-byte filter loop to renderers). | On perf-relevant change | [`benchmarks.md`](benchmarks.md) | Current trend: 3 points (v0.3.0 / M3@9df0859 / v0.5.0). Header table also pins "cyrius 6.0.0" while VERSION-aligned toolchain is 6.0.1 — refresh at next bench run. |
+| 2 | **Periodic audit** — full P(-1) source review + dep-tree CVE sweep before the M6 v1.0 freeze (and on any mihi / ai-hwaccel / cyrius major bump). | Before v1.0; on dep-major bump | [`CLAUDE.md`](../CLAUDE.md) *Process P(-1)* | Most recent: 2026-05-19 v0.9.0 audit (M5 → M5.5 → v0.9.0 chain). Next trigger: mihi 1.0 repin (mandatory) or any new `src/*.cyr` change — see the v0.9.0 audit's *Next audit trigger* clause. |
+| 3 | **F-001 mitigation** — **CLOSED at v0.9.0**. `iam_copy_value` sanitizer landed in `src/display.cyr`, wired into all three renderers, 15 byte-exact tests cover the surface, bench confirms zero measurable cost. Row kept one cycle as historical commitment. | (resolved) | [`audit/2026-05-19-v0.9.0-audit.md`](audit/2026-05-19-v0.9.0-audit.md) §A | Closed. |
+| 4 | **ADR 0002 resolution** — **CLOSED at v0.8.0 (Accepted)**. Output-shape reorder landed; ADR 0001 §2-§3 superseded; tests regenerated; sample-output regenerated. Row removable at next sweep if uneventful. | (resolved) | [`adr/0002-output-shape-reorder.md`](adr/0002-output-shape-reorder.md) | Closed. |
+| 5 | **Benchmark refresh** — re-run the bench harness against current `build/iam` whenever a perf-relevant change ships. | On perf-relevant change | [`benchmarks.md`](benchmarks.md) | Current trend: 4 points (v0.3.0 / M3@9df0859 / v0.5.0 / v0.9.0). Toolchain pin drift resolved 6.0.0 → 6.0.1 at the v0.9.0 refresh. Next likely refresh: post-mihi-1.0 repin. |
 
 ---
 

@@ -5,20 +5,29 @@
 
 ## Version
 
-**0.8.0** — shipped 2026-05-19. ADR 0002 accepted: output-shape
-reorder lands. Line order moves from the v0.3.0-era CPU-first
-ordering to the identity → runtime → hardware spine (Distro / Host
-/ Kernel / Uptime / CPU / GPU? / Memory), with the optional GPU
-line now slotted between CPU and Memory instead of trailing at
-position 7. `src/main.cyr` accumulation block reordered (probe
-calls unchanged); 39 ADR-contract byte-exact tests regenerated;
-`docs/examples/sample-output.txt` regenerated. **Breaking
-(pre-v1.0)** by intent — done now while consumer count is zero per
-audit-trail; same change post-v1.0 would have been a freeze
-violation. ADR 0001 marked `Superseded by 0002`; §1, §4, §5, §6
-carry over. F-001 still the lone v1.0 blocker; this is the first
-source change since v0.5.0, so the M5.5 audit's *Next audit
-trigger* clause is now armed for the F-001-mitigation cut.
+**0.9.0** — shipped 2026-05-19. **M6 release candidate.** F-001
+TTY-escape sanitizer lands as the v1.0 freeze prerequisite:
+`iam_copy_value` in `src/display.cyr` replaces any value-column
+byte `< 0x20` with `?`, wired into `iam_render` / `iam_render_buf`
+/ `iam_render_kernel`. 15 new byte-exact assertions cover the
+sanitizer surface (boundary, ESC, TAB, newline-injection, mixed
+control bytes); test count 90 → 105. Bench refreshed: **1510 µs
+median, 3 trials × N=500** on archaemenid — inside the v0.5.0
+noise floor, sanitizer is invisible at this scale. Follow-up audit
+([`../audit/2026-05-19-v0.9.0-audit.md`](../audit/2026-05-19-v0.9.0-audit.md))
+filed superseding M5.5: **F-001 closed**, F-002 carries as INFO,
+**no remaining v1.0 blockers on the iam side**. v0.9.0 RC sits as
+the freeze candidate while we wait for mihi 1.0 ship; the M6 v1.0
+cut now needs only the mihi repin.
+
+**Previous**: 0.8.0 — 2026-05-19. ADR 0002 accepted: output-shape
+reorder to identity → runtime → hardware spine
+(Distro / Host / Kernel / Uptime / CPU / GPU? / Memory).
+**Breaking (pre-v1.0)** by intent — landed while consumer count
+was zero. ADR 0001 marked Superseded by 0002 (§1, §4, §5, §6 carry
+over); 39 ADR-contract tests regenerated; sample-output regenerated.
+First source change since v0.5.0 — armed the M5.5 audit's *Next
+audit trigger* clause for the F-001 cut that followed at v0.9.0.
 
 **Previous**: 0.7.0 — 2026-05-19. M5.5 complete: dep-tree CVE / 0day
 web research returned clean, full source re-walk against the M5
@@ -103,14 +112,20 @@ unchanged. Freezes at v1.0):
 
 ## Tests
 
-- `tests/iam.tcyr` — 90 assertions:
+- `tests/iam.tcyr` — 105 assertions:
   - Formatter logic (51): `iam_uint_into`, `iam_format_bytes`
     (boundary + floor + preview cases), `iam_format_uptime`
     (zero-elision, fresh-boot floor, cap-too-small).
   - ADR-contract byte-exact (39): per-label padding for all seven
     labels, `(unknown)` fallback paths through every renderer
     variant, full six-line + seven-line assembled output, full
-    all-probes-failed degraded shape.
+    all-probes-failed degraded shape. Regenerated at v0.8.0
+    against the ADR 0002 order.
+  - F-001 TTY-escape sanitization byte-exact (15): `iam_copy_value`
+    boundary (0x1F / 0x20 / TAB); ESC in `iam_render` value;
+    newline-injection attempt; ESC mid-buffer in `iam_render_buf`;
+    ESC + TAB in `iam_render_kernel` name + version; unchanged
+    `IAM_UNKNOWN_TEXT` fallback path.
 - `tests/iam.bcyr` — benchmark stub (`noop` micro-bench).
 - `tests/iam.fcyr` — fuzz stub.
 
@@ -141,8 +156,8 @@ invocations and shell login scripts.
 
 ## Benchmarks
 
-Three-point cold-start trend captured 2026-05-19 on archaemenid
-(median of three N=500 batches per build, full methodology in
+Four-point cold-start trend on archaemenid (median of three N=500
+batches per build, full methodology in
 [`../benchmarks.md`](../benchmarks.md)):
 
 | Build              | Per-invocation | Lines |
@@ -150,50 +165,65 @@ Three-point cold-start trend captured 2026-05-19 on archaemenid
 | v0.3.0 (M1+M2)     |      ~555 µs   |     6 |
 | M3 @ 9df0859       |     ~1514 µs   |     7 |
 | v0.5.0 (M4)        |     ~1511 µs   |     7 |
+| v0.9.0 (M6 RC)     |     ~1510 µs   |     7 |
 
-M5 < 10 ms cold-start gate met with ~6.5× headroom. GPU probe (M3)
-is the dominant cost; single-flush refactor (M4) was nominal at
-this scale.
+M5 < 10 ms cold-start gate met with ~6.6× headroom at v0.9.0. GPU
+probe (M3) remains the dominant cost; single-flush refactor (M4)
+was nominal at this scale; F-001 sanitizer (v0.9.0) is invisible
+at this scale (per-byte filter cost < bench resolution).
 
 ## Audit
 
-M5.5 refreshed audit at
-[`../audit/2026-05-19-m5.5-audit.md`](../audit/2026-05-19-m5.5-audit.md)
-supersedes the M5 doc
+v0.9.0 RC follow-up audit at
+[`../audit/2026-05-19-v0.9.0-audit.md`](../audit/2026-05-19-v0.9.0-audit.md)
+supersedes the M5.5 doc
+([`../audit/2026-05-19-m5.5-audit.md`](../audit/2026-05-19-m5.5-audit.md))
+— which in turn superseded the M5 doc
 ([`../audit/2026-05-19-audit.md`](../audit/2026-05-19-audit.md))
-for the v0.7.0 scope; the M5 doc stays in the directory as
-historical record. **Verdict**: pass, no new findings.
+— for the v0.9.0 scope. All three prior docs stay in the directory
+as historical record per audit-trail convention. **Verdict**: pass,
+no new findings.
 
-- **F-001** (OPEN, LOW): TTY-escape sanitization on mihi-returned
-  strings — gate for M6 v1.0 freeze. Carried forward from M5.
-- **F-002** (INFO): `strlen` on mihi cstrings is trust-dependent —
-  cross-link to mihi audit, no iam-side change. Carried forward.
-- **Dep-tree CVE / 0day search**: clean. All direct deps are
-  first-party MacCracken projects with no public CVE / advisory
-  registrations. Cyrus IMAP / NVIDIA Container Toolkit
-  name-collision noise documented and dismissed.
-- **Source re-walk**: zero drift since v0.5.0 audit baseline.
+- **F-001** (**RESOLVED at v0.9.0**): TTY-escape sanitization
+  mitigation landed in `iam_copy_value` (`src/display.cyr`); 15
+  byte-exact tests lock the behavior. Closes the v1.0-blocking item
+  carried forward from M5.
+- **F-002** (INFO, carries forward): `strlen` on mihi cstrings is
+  trust-dependent — mihi-side invariant, not iam's to fix. F-001's
+  sanitizer provides incidental defense-in-depth against embedded
+  NUL bytes surviving past `strlen`.
+- **Source re-walk** (v0.9.0): two real changes since the v0.5.0
+  baseline — the v0.8.0 reorder and the v0.9.0 F-001 mitigation.
+  Both reviewed, both clean. mihi-call surface unchanged; buffer
+  caps unchanged; syscall family unchanged.
+- **Bench impact**: median 1510 µs at v0.9.0 — inside the v0.5.0
+  noise floor (1490–1545 µs). F-001 is free at this scale.
 
 All other categories clean (bounds, exit-code discipline, no
 unsafe syscalls, no env / file / network I/O).
 
+**v1.0-blocking items remaining on iam side**: none. The only
+remaining M6 gate is mihi shipping its own 1.0.
+
 ## Next
 
-See [`roadmap.md`](roadmap.md). With ADR 0002 accepted and the
-output-shape contract reordered at v0.8.0, the remaining roadmap is:
+See [`roadmap.md`](roadmap.md). With v0.9.0 RC cut and the iam-side
+v1.0 freeze prerequisites cleared, the remaining roadmap is a
+single external gate:
 
-- **F-001 mitigation** — add control-character / escape filter at
-  the renderer boundary in `src/display.cyr` (replace bytes
-  `< 0x20` except `\n` with `?`; strip `\x1b` from mihi-returned
-  value buffers inside `iam_render` / `iam_render_buf` /
-  `iam_render_kernel`). Gates the M6 freeze. v0.8.0 was the first
-  source change since v0.5.0 (the reorder), so the M5.5 audit's
-  *Next audit trigger* clause is now armed — the F-001 cut should
-  bundle a follow-up audit confirming the new output-shape code +
-  the sanitizer's bounds.
-- **M6** — v0.9.0 RC cuts when F-001 mitigation has landed and the
-  follow-up audit is clean. v1.0.0 cuts once mihi 1.0 ships; the
-  v1.0 byte contract is now the ADR 0002 shape.
+- **Wait for mihi 1.0 ship.** iam currently pins mihi 0.7.0 and
+  the M6 v1.0 cut repins to mihi 1.0.x. No source changes planned
+  in iam during the wait — v0.9.0 RC IS the freeze candidate.
+- **M6 v1.0.0** cuts once mihi 1.0 ships. Steps at that point:
+  bump `[deps.mihi]` pin in `cyrius.cyml`, run the full audit
+  template against the new mihi version (per the v0.9.0 audit's
+  *Next audit trigger* clause: mihi major bump is a mandatory
+  trigger), regenerate `cyrius.lock`, and cut v1.0.0 with the
+  `Breaking` framing dropped (output shape now frozen).
+
+Dogfood stays live across all of this — `~/.local/bin/iam` →
+`build/iam`, fired from `~/.zshrc` on every interactive shell.
+Future cuts auto-propagate via the symlink.
 
 Dogfood stays live across all of this — `~/.local/bin/iam` →
 `build/iam`, fired from `~/.zshrc` on every interactive shell.

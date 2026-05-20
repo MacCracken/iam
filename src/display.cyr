@@ -54,6 +54,35 @@ fn iam_copy(out, cap, pos, src, len): i64 {
     return pos + len;
 }
 
+# Copy `len` value-column bytes from `src` into `out` starting at
+# `pos`, sanitizing any byte < 0x20 to '?' (0x3F). F-001 mitigation
+# at the renderer boundary — covers the M5/M5.5-audit threat of
+# ANSI escape sequences or other control bytes arriving via
+# mihi-returned strings (hostname, distro PRETTY_NAME, CPU model,
+# GPU name, kernel name/version). 0x1B (ESC) is in the < 0x20 set
+# so the entire ANSI CSI surface is neutralized. Newlines (0x0A) in
+# value bytes are also caught — preserves the line-equals-one-fact
+# contract against any future probe that could otherwise inject a
+# stray \n.
+#
+# Sanitization is value-column only. Labels, padding, the trailing
+# \n, and the IAM_UNKNOWN_TEXT placeholder are iam-controlled bytes
+# and route through plain `iam_copy` unchanged. Cost: one
+# comparison per value byte; realistic value lengths run sub-µs.
+#
+# Returns new pos, or 0 - 1 on overflow.
+fn iam_copy_value(out, cap, pos, src, len): i64 {
+    if (pos + len > cap) { return 0 - 1; }
+    var i = 0;
+    while (i < len) {
+        var b = load8(src + i);
+        if (b < 32) { b = 63; }
+        store8(out + pos + i, b);
+        i = i + 1;
+    }
+    return pos + len;
+}
+
 # Render "<label>:<pad><value>\n" into `out` (capacity `cap`).
 # `label` is a cstring like "CPU"; `value` is the probe result.
 # value=0 means probe failure → emit IAM_UNKNOWN_TEXT in the value
@@ -77,7 +106,7 @@ fn iam_render(out, cap, label, value): i64 {
         pos = iam_copy(out, cap, pos, IAM_UNKNOWN_TEXT, IAM_UNKNOWN_LEN);
     } else {
         var vlen = strlen(value);
-        pos = iam_copy(out, cap, pos, value, vlen);
+        pos = iam_copy_value(out, cap, pos, value, vlen);
     }
     if (pos < 0) { return 0 - 1; }
     pos = iam_put(out, cap, pos, 10);  # '\n'
@@ -105,7 +134,7 @@ fn iam_render_buf(out, cap, label, valbuf, vlen): i64 {
     if (vlen <= 0) {
         pos = iam_copy(out, cap, pos, IAM_UNKNOWN_TEXT, IAM_UNKNOWN_LEN);
     } else {
-        pos = iam_copy(out, cap, pos, valbuf, vlen);
+        pos = iam_copy_value(out, cap, pos, valbuf, vlen);
     }
     if (pos < 0) { return 0 - 1; }
     pos = iam_put(out, cap, pos, 10);
@@ -133,11 +162,11 @@ fn iam_render_kernel(out, cap, label, name, version): i64 {
         if (pos < 0) { return 0 - 1; }
         pad = pad - 1;
     }
-    pos = iam_copy(out, cap, pos, name, strlen(name));
+    pos = iam_copy_value(out, cap, pos, name, strlen(name));
     if (pos < 0) { return 0 - 1; }
     pos = iam_put(out, cap, pos, 32);
     if (pos < 0) { return 0 - 1; }
-    pos = iam_copy(out, cap, pos, version, strlen(version));
+    pos = iam_copy_value(out, cap, pos, version, strlen(version));
     if (pos < 0) { return 0 - 1; }
     pos = iam_put(out, cap, pos, 10);
     if (pos < 0) { return 0 - 1; }

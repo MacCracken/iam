@@ -4,6 +4,81 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-05-19
+
+**M6 release candidate.** F-001 (TTY-escape sanitization at the
+renderer boundary) lands as the v1.0 freeze prerequisite identified
+across the M5 / M5.5 audits. v0.9.0 RC sits as the iam-side
+release candidate while we wait for mihi 1.0 to ship; the v1.0 cut
+will only need to repin mihi at that point.
+
+### Security
+- **F-001 mitigation** — `iam_copy_value` in `src/display.cyr`
+  replaces any value-column byte `< 0x20` with `?` (0x3F).
+  Neutralizes ANSI CSI escapes (lead byte 0x1B), TAB, line-injection
+  attempts (LF / CR), and the rest of the C0 control range against
+  hostile data arriving via mihi-returned strings (hostname, distro
+  PRETTY_NAME, CPU model, kernel name+version, GPU name). Wired
+  into `iam_render` (value path), `iam_render_buf` (valbuf path),
+  and `iam_render_kernel` (name + version paths). Labels, padding,
+  `IAM_UNKNOWN_TEXT`, and the trailing `\n` continue through plain
+  `iam_copy` — they're iam-controlled. DEL (0x7F) and the C1
+  control range (0x80–0x9F) are intentionally not sanitized to
+  preserve legitimate UTF-8 byte sequences in distro PRETTY_NAMEs.
+- `docs/audit/2026-05-19-v0.9.0-audit.md` — follow-up audit doc
+  filed superseding M5.5 for the v0.8.0 reorder + v0.9.0 F-001
+  scope. Verdict: pass. **F-001 closed**; F-002 carries as
+  accepted-risk INFO. **No remaining v1.0 blockers on the iam
+  side** — mihi 1.0 ship is the only external gate. M5 and M5.5
+  audit docs stay in the directory as historical record per
+  audit-trail convention.
+
+### Added
+- 15 new byte-exact assertions in `tests/iam.tcyr` under a new
+  `test_group("display.cyr — F-001 TTY-escape sanitization")`.
+  Cases: `iam_copy_value` boundary (0x1F → `?`, 0x20 unchanged,
+  TAB → `?`); `iam_render` ESC-laden value; `iam_render`
+  newline-injection attempt (proves the line-equals-one-fact
+  contract holds); `iam_render_buf` ESC mid-buffer;
+  `iam_render_kernel` ESC + TAB in name + version;
+  `IAM_UNKNOWN_TEXT` fallback unchanged. Test inputs built via
+  explicit `store8` (no reliance on Cyrius string-literal escape
+  support beyond `\n`). Total assertion count 90 → 105.
+- `iam_copy_value(out, cap, pos, src, len)` in `src/display.cyr`
+  — the canonical value-column copy primitive. Same overflow
+  contract as `iam_copy` (returns -1); single comparison per byte;
+  cost is invisible at the bench scale.
+
+### Changed
+- `src/display.cyr` — three renderers swap value-side `iam_copy`
+  calls to `iam_copy_value` (`iam_render` line 109; `iam_render_buf`
+  line 137; `iam_render_kernel` lines 165 + 169). Plain `iam_copy`
+  still backs labels, padding, the `(unknown)` fallback, and the
+  trailing newline.
+- `docs/benchmarks.md` — fourth row added to the trend table at
+  v0.9.0 (M6 RC): **1510 µs median, 3 trials × N=500** on
+  archaemenid. Sits inside the v0.5.0 noise floor (1490–1545 µs);
+  sanitizer is invisible at this scale. Toolchain row bumped
+  cyrius 6.0.0 → 6.0.1 (matches the active local pin and resolves
+  the drift surfaced by the v0.7.0 doc-health scaffold). History
+  entry added for the v0.9.0 re-measurement. ADR-reference comment
+  updated 0001 §3 → 0001 §5 (carried over by 0002). "Three-point
+  trend" header → "Four-point trend"; M3/M4 noise-floor commentary
+  expanded to include v0.9.0 as the third in-band point.
+- `VERSION` — 0.8.0 → 0.9.0.
+
+### Notes
+- The audit-trigger clause from the M5.5 audit fired correctly:
+  the v0.8.0 reorder counted as "the first source change since
+  v0.5.0," and the F-001 cut bundled the follow-up audit per the
+  *Next audit trigger* schedule. The v0.9.0 audit is now the
+  canonical iam-side artifact through to the v1.0 cut.
+- No state.md / roadmap.md / doc-health.md content changes are
+  flagged Breaking — the only Breaking change in the M6 path was
+  the v0.8.0 reorder, which already shipped under the pre-v1.0
+  grace. v1.0 itself locks the contract; from v1.0 onward, any
+  output-shape change becomes a real `Breaking`.
+
 ## [0.8.0] — 2026-05-19
 
 ADR 0002 accepted — output-shape reorder lands. Line order now

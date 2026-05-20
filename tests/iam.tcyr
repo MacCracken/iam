@@ -175,6 +175,97 @@ fn main() {
     n = iam_render_kernel(&rb, 256, "Kernel", "Linux", 0);
     assert_buf_eq(&rb, n, "Kernel: (unknown)\n", "kernel version=0 → unknown");
 
+    # ----- F-001 TTY-escape / control-char sanitization --------------
+    # F-001 mitigation: iam_copy_value (display.cyr) replaces any
+    # byte < 0x20 with '?' (0x3F) when copying value-column bytes.
+    # Covers ANSI CSI escapes (0x1B), TAB (0x09), stray newlines
+    # (0x0A), and the rest of the C0 control range. Label, padding,
+    # and IAM_UNKNOWN_TEXT bytes are iam-controlled and not
+    # sanitized.
+    #
+    # Inputs are built with explicit store8 calls — no reliance on
+    # Cyrius string-literal escape support beyond \n.
+    test_group("display.cyr — F-001 TTY-escape sanitization");
+
+    # iam_copy_value boundary cases — 0x1F → '?', 0x20 → ' ' (unchanged)
+    var cv[16];
+    var cvin[4];
+    store8(&cvin + 0, 31);  # 0x1F (US — last C0 control)
+    store8(&cvin + 1, 32);  # 0x20 (space — first printable)
+    store8(&cvin + 2, 65);  # 'A'
+    store8(&cvin + 3, 9);   # 0x09 (TAB)
+    n = iam_copy_value(&cv, 16, 0, &cvin, 4);
+    assert_eq(n, 4, "iam_copy_value: returns new pos for 4-byte input");
+    assert_eq(load8(&cv + 0), 63, "byte 0x1F → '?'");
+    assert_eq(load8(&cv + 1), 32, "byte 0x20 unchanged (space)");
+    assert_eq(load8(&cv + 2), 65, "byte 'A' unchanged");
+    assert_eq(load8(&cv + 3), 63, "byte 0x09 (TAB) → '?'");
+
+    # iam_render: ESC-laden CPU model. Build "\x1b[31mRed" as cstring.
+    var ev[16];
+    store8(&ev + 0, 27);   # ESC (0x1B)
+    store8(&ev + 1, 91);   # '['
+    store8(&ev + 2, 51);   # '3'
+    store8(&ev + 3, 49);   # '1'
+    store8(&ev + 4, 109);  # 'm'
+    store8(&ev + 5, 82);   # 'R'
+    store8(&ev + 6, 101);  # 'e'
+    store8(&ev + 7, 100);  # 'd'
+    store8(&ev + 8, 0);    # NUL
+    n = iam_render(&rb, 256, "CPU", &ev);
+    assert_buf_eq(&rb, n, "CPU:    ?[31mRed\n",
+                  "iam_render: ESC sanitized to '?'");
+
+    # iam_render: newline-injection attempt in value would otherwise
+    # break the line-equals-one-fact contract. Sanitizer catches it.
+    var nv[8];
+    store8(&nv + 0, 65);   # 'A'
+    store8(&nv + 1, 10);   # 0x0A (LF) — injection attempt
+    store8(&nv + 2, 66);   # 'B'
+    store8(&nv + 3, 0);    # NUL
+    n = iam_render(&rb, 256, "Host", &nv);
+    assert_buf_eq(&rb, n, "Host:   A?B\n",
+                  "iam_render: LF injection sanitized to '?'");
+
+    # iam_render_buf: control byte mid-buffer.
+    var bv[6];
+    store8(&bv + 0, 49);   # '1'
+    store8(&bv + 1, 32);   # ' '
+    store8(&bv + 2, 27);   # ESC
+    store8(&bv + 3, 71);   # 'G'
+    store8(&bv + 4, 105);  # 'i'
+    store8(&bv + 5, 66);   # 'B'
+    n = iam_render_buf(&rb, 256, "Memory", &bv, 6);
+    assert_buf_eq(&rb, n, "Memory: 1 ?GiB\n",
+                  "iam_render_buf: ESC mid-buffer sanitized");
+
+    # iam_render_kernel: ESC in both name and version.
+    var kn[8];
+    store8(&kn + 0, 27);   # ESC
+    store8(&kn + 1, 76);   # 'L'
+    store8(&kn + 2, 105);  # 'i'
+    store8(&kn + 3, 110);  # 'n'
+    store8(&kn + 4, 117);  # 'u'
+    store8(&kn + 5, 120);  # 'x'
+    store8(&kn + 6, 0);    # NUL
+    var kv[8];
+    store8(&kv + 0, 55);   # '7'
+    store8(&kv + 1, 46);   # '.'
+    store8(&kv + 2, 48);   # '0'
+    store8(&kv + 3, 9);    # TAB
+    store8(&kv + 4, 49);   # '1'
+    store8(&kv + 5, 0);    # NUL
+    n = iam_render_kernel(&rb, 256, "Kernel", &kn, &kv);
+    assert_buf_eq(&rb, n, "Kernel: ?Linux 7.0?1\n",
+                  "iam_render_kernel: ESC + TAB sanitized in name + version");
+
+    # IAM_UNKNOWN_TEXT path is NOT sanitized — it's iam-controlled
+    # plain ASCII, but proving the bytes are exact (no incidental
+    # change from F-001) locks the v0.5.0 behavior in place.
+    n = iam_render(&rb, 256, "Distro", 0);
+    assert_buf_eq(&rb, n, "Distro: (unknown)\n",
+                  "F-001: unknown fallback bytes unchanged");
+
     # ----- Full ADR-contract output (ADR 0002 §2) -------------------
     # Six-line canonical shape — every required label in order, no
     # GPU line. Mirrors what `./build/iam` emits on a GPU-less box.

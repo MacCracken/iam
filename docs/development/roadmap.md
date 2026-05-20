@@ -134,18 +134,26 @@ audit-trail closure.
 
 ### M6 — v0.9.0 RC + v1.0.0
 
-- **v0.9.0 RC** cuts when F-001 mitigation (TTY-escape sanitization
-  at the renderer boundary) has landed and a follow-up audit
-  confirms the sanitizer's bounds. M5.5 cleared the audit-side
-  prerequisite at v0.7.0. Last pre-freeze release; sits as the
-  release candidate while we wait for mihi 1.0.
-- Pin to mihi 1.0.x (mihi must ship 1.0 first; the dep gate matters)
-- Output shape frozen — ADR 0002 becomes the v1.0 contract
+- ✅ **v0.9.0 RC** — cut 2026-05-19. F-001 TTY-escape sanitizer
+  landed (`iam_copy_value` in `src/display.cyr`, wired into all
+  three renderers + 15 byte-exact tests). Follow-up audit at
+  [`docs/audit/2026-05-19-v0.9.0-audit.md`](../audit/2026-05-19-v0.9.0-audit.md)
+  filed — verdict pass, F-001 closed, no remaining v1.0 blockers
+  on the iam side. Bench refreshed: 1510 µs median, inside the
+  v0.5.0 noise floor (sanitizer is invisible at this scale).
+  v0.9.0 RC IS the freeze candidate; no further iam-side source
+  changes planned ahead of v1.0.
+- ⏳ **Pin to mihi 1.0.x** (mihi must ship 1.0 first; this is the
+  only remaining v1.0 gate). External to iam.
+- ⏳ Output shape frozen — ADR 0002 becomes the v1.0 contract
   (accepted at v0.8.0; identity → runtime → hardware spine). ADR 0001
   carries through for §1, §4, §5, §6.
-- CHANGELOG `Breaking` section for the freeze (post-freeze, output-
-  shape changes leave the pre-v1.0 grace zone for good)
-- v1.0.0 cut
+- ⏳ Run the full audit template against the new mihi version per
+  the v0.9.0 audit's *Next audit trigger* clause (mihi major bump
+  is mandatory).
+- ⏳ CHANGELOG `Breaking` framing dropped post-freeze (post-v1.0,
+  any output-shape change becomes a real `Breaking`).
+- ⏳ v1.0.0 cut.
 
 ## Out of scope (for v1.0)
 
