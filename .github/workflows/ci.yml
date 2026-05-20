@@ -46,19 +46,24 @@ jobs:
           cyrius build src/main.cyr build/iam
 
       - name: Smoke run
-        # Run the binary and verify it produces the expected six lines
-        # in the documented order. Output is mihi-probe-driven so the
-        # value half changes per runner; we anchor on the label column
-        # and line count, not the values.
+        # Run the binary and verify it produces the documented label
+        # set in order. The six required lines (CPU / Memory / Kernel
+        # / Host / Distro / Uptime) are always present; an optional
+        # GPU line trails when mihi detects an accelerator (added in
+        # M3 / v0.4.0). CI runners have no GPU, so this gate expects
+        # exactly 6 lines on hosted runners — but accepts a trailing
+        # `GPU:` line for self-hosted / dev-machine reproducibility.
         #
+        # Output is mihi-probe-driven so the value half changes per
+        # runner; we anchor on the label column and order, not values.
         # The label set + ordering IS the v1.0 contract (locks at M4
         # ADR). Any change to this list is a Breaking change in
         # CHANGELOG. Keep this gate aligned with state.md "Output".
         run: |
           ./build/iam > /tmp/iam.out
           lines=$(wc -l < /tmp/iam.out)
-          if [ "$lines" -ne 6 ]; then
-            echo "FAIL: expected 6 output lines, got $lines"
+          if [ "$lines" -lt 6 ] || [ "$lines" -gt 7 ]; then
+            echo "FAIL: expected 6 or 7 output lines, got $lines"
             cat /tmp/iam.out
             exit 1
           fi
@@ -71,15 +76,18 @@ jobs:
           done
           # Order check: the labels must appear in the documented
           # sequence — the contract is "shape + order", not just
-          # "shape".
+          # "shape". Trailing GPU line, if present, must be in
+          # position 7 (after Uptime).
           ord=$(grep -oE '^[A-Za-z]+:' /tmp/iam.out | tr -d ':' | tr '\n' ' ')
-          want="CPU Memory Kernel Host Distro Uptime "
-          if [ "$ord" != "$want" ]; then
-            echo "FAIL: label order is '$ord', expected '$want'"
+          want6="CPU Memory Kernel Host Distro Uptime "
+          want7="CPU Memory Kernel Host Distro Uptime GPU "
+          if [ "$ord" != "$want6" ] && [ "$ord" != "$want7" ]; then
+            echo "FAIL: label order is '$ord'"
+            echo "  expected '$want6' (no GPU) or '$want7' (with GPU)"
             cat /tmp/iam.out
             exit 1
           fi
-          echo "OK: six lines, correct labels, correct order"
+          echo "OK: $lines lines, correct labels, correct order"
           cat /tmp/iam.out
 
       - name: Lint
@@ -120,13 +128,16 @@ jobs:
           echo "iam-dce: $(wc -c < build/iam-dce) bytes"
           ./build/iam-dce > /tmp/iam-dce.out
           lines=$(wc -l < /tmp/iam-dce.out)
-          [ "$lines" -eq 6 ] || {
-            echo "FAIL: DCE'd binary output line count ($lines) ≠ 6"
+          if [ "$lines" -lt 6 ] || [ "$lines" -gt 7 ]; then
+            echo "FAIL: DCE'd binary output line count ($lines) not in {6,7}"
             cat /tmp/iam-dce.out
             exit 1
-          }
+          fi
           # Byte-equal value half is runner-dependent — only labels
           # are checked here. Sufficient to catch a DCE mis-class.
+          # The six required labels must all be present; GPU is
+          # accelerator-presence-dependent and excluded from the
+          # required set.
           for label in CPU Memory Kernel Host Distro Uptime; do
             grep -qE "^${label}:" /tmp/iam-dce.out || {
               echo "FAIL: DCE output missing '${label}:' line"
@@ -134,7 +145,19 @@ jobs:
               exit 1
             }
           done
-          echo "OK: DCE'd binary preserves the six-line shape"
+          # Cross-check: GPU line presence/absence must match between
+          # the two builds. If non-DCE detected an accelerator, the
+          # DCE'd binary had better detect the same one (would prove
+          # DCE didn't drop a live mihi_gpu_* call path).
+          gpu_main=$(grep -c '^GPU:' /tmp/iam.out)
+          gpu_dce=$(grep -c '^GPU:' /tmp/iam-dce.out)
+          if [ "$gpu_main" != "$gpu_dce" ]; then
+            echo "FAIL: GPU-line presence diverges (main=$gpu_main, DCE=$gpu_dce)"
+            echo "--- main ---"; cat /tmp/iam.out
+            echo "--- DCE ---";  cat /tmp/iam-dce.out
+            exit 1
+          fi
+          echo "OK: DCE'd binary preserves the line shape ($lines lines)"
 
   security:
     name: Security scan

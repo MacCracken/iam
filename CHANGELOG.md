@@ -4,6 +4,55 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-05-19
+
+M4 — output-shape ADR. The bytes iam emits are now a written
+contract, not just folklore. No source code changes; this release
+codifies decisions already shipped in v0.3.0 and v0.4.0 so they
+survive a v1.0 freeze.
+
+### Added
+- `docs/adr/0001-output-shape.md` — accepted ADR locking line order,
+  8-byte label column, `(unknown)` fallback policy, the
+  single-optional-GPU-line rule, no-color / pipe-equivalence
+  guarantee, exit-0 contract. Includes the alternatives-considered
+  trail (tab separators, variable label width, color-on-TTY,
+  per-GPU lines, JSON output).
+- `docs/examples/sample-output.txt` — canonical sample output
+  captured on archaemenid. Referenced from the ADR; the seed for
+  the byte-exact mihi-mock tests that follow in a later bite.
+- ADR index updated in `docs/adr/README.md`.
+
+### Deferred
+- Byte-for-byte tests against a fixed mihi-mock input — the third
+  M4 deliverable per the roadmap. Requires either routing
+  `iam_emit` writes through a buffer or building a mock-mihi shim;
+  taken as a separate bite to keep this release pure-documentation.
+
+## [0.4.0] — 2026-05-19
+
+M3 — GPU line. Single trailing `GPU:` line driven by `mihi_gpu_*`,
+suppressed entirely when `mihi_gpu_count()` is 0. Multi-GPU systems
+show the first device only; consumers who need per-device detail
+call mihi directly (whoami-simple rule: iam picks one line per fact).
+
+### Added
+- `GPU:` line in the documented output, emitted after `Uptime:` when
+  `mihi_gpu_count() > 0`. Pulls the device name from `mihi_gpu_name(0)`
+  (ai-hwaccel's no-exec accelerator registry, masked of all subprocess-
+  spawning backends — pure sysfs reads).
+- CI smoke gate widened to accept 6 or 7 lines; the required label
+  set (CPU/Memory/Kernel/Host/Distro/Uptime) is unchanged.
+- DCE parity check now cross-checks GPU-line presence between
+  non-DCE and DCE'd builds — a DCE that dropped a live
+  `mihi_gpu_*` call path would diverge here.
+
+### Notes
+- CI hosted runners (ubuntu-latest) have no accelerator, so the GPU
+  line is exercised only on self-hosted / dev-machine runs. The DCE
+  parity check still catches drops because it compares the two
+  builds against each other, not against an expected fixed count.
+
 ## [0.3.0] — 2026-05-19
 
 M1+M2 in one bite: mihi was already at 0.7.0 (past M3's gate), so

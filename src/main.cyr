@@ -58,6 +58,16 @@ fn main() {
     }
     iam_emit("Distro", distro);
     iam_emit_buf("Uptime", &upout, ulen);
+
+    # Optional GPU line — suppressed entirely when mihi_gpu_count is
+    # 0 (not an error: most servers and CI runners have no
+    # accelerator). On count >= 1 we emit the first device; multi-GPU
+    # boxes are rare enough that iam stays whoami-simple here.
+    # Consumers needing per-device detail call mihi directly.
+    var ngpu = mihi_gpu_count();
+    if (ngpu > 0) {
+        iam_emit("GPU", mihi_gpu_name(0));
+    }
     return 0;
 }
 

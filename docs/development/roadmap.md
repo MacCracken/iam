@@ -43,24 +43,31 @@ by the time iam reached M1, so the M1 (CPU/RAM/kernel) and M2
 - Tests cover formatter logic (51 assertions); end-to-end probe
   wiring verified by running `./build/iam` on the maintainer's box.
 
-### M3 — GPU line (v0.4.0)
+### M3 — GPU line (v0.4.0) — ✅ shipped 2026-05-19
 
-- Display line: `GPU: <vendor> <model>` (sourced via mihi → ai-hwaccel)
-- Suppressed line on systems without a detectable GPU (not an error)
-- **Dep gate**: mihi ≥ 0.4.0
-- **Acceptance**: `iam` on a NUC AMD system prints a GPU line.
+- Trailing `GPU:` line emitted when `mihi_gpu_count() > 0`,
+  suppressed entirely otherwise (zero accelerators is not an error).
+- Multi-GPU policy (recorded for M4's ADR): show the first device.
+  Whoami-simple wins over multi-line surface; consumers needing
+  per-device detail call mihi directly.
+- CI smoke gate accepts 6 or 7 lines; DCE parity check
+  cross-validates GPU presence between non-DCE and DCE'd builds.
+- **Dep gate**: mihi ≥ 0.4.0 (satisfied — mihi was at 0.7.0).
+- **Acceptance**: `iam` on archaemenid (AMD Ryzen 7 5800H, integrated
+  Radeon) prints "GPU: AMD Radeon (PCI 0x1002:0x1638)".
 
-### M4 — Output-shape ADR (v0.5.0)
+### M4 — Output-shape ADR (v0.5.0) — ✅ ADR + sample shipped 2026-05-19
 
-Lock the output shape with a written rationale. This is the
-v1.0-contract precursor.
+ADR + sample output landed. Byte-exact mihi-mock tests carved out
+as a follow-up bite (smaller refactor work; the ADR codifies
+decisions already in the code).
 
-- ADR: `docs/adr/0001-output-shape.md` — line order, label padding,
-  separators, exit codes; explicit rationale against neofetch-style
-  configurability
-- Sample output captured in `docs/examples/sample-output.txt`
-- Tests assert exact byte-for-byte output for a fixed mihi-mock input
-- **Dep gate**: none (decision is local)
+- ✅ ADR: `docs/adr/0001-output-shape.md` — line order, 8-byte label
+  column, `(unknown)` fallback, single-optional-GPU rule, no-color
+  / pipe-equivalence, exit-0 contract, alternatives-considered.
+- ✅ Sample output captured in `docs/examples/sample-output.txt`.
+- ⏳ Byte-exact tests against fixed mihi-mock input (follow-up bite).
+- **Dep gate**: none (decision is local).
 - **Acceptance**: ADR landed; sample output reproducible across runs.
 
 ### M5 — Harden + dogfood (v0.9.0)

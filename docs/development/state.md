@@ -5,9 +5,10 @@
 
 ## Version
 
-**0.3.0** — shipped 2026-05-19. M1+M2 collapsed into one cut: six
-labeled lines (CPU / Memory / Kernel / Host / Distro / Uptime),
-every value sourced from mihi.
+**0.5.0** — shipped 2026-05-19. M4 ADR landed: the bytes iam emits
+are now a written contract. No source changes from v0.4.0; output
+shape is still six required lines (CPU / Memory / Kernel / Host /
+Distro / Uptime) + optional GPU.
 
 ## Toolchain
 
@@ -16,8 +17,10 @@ every value sourced from mihi.
 ## Shape
 
 Binary (`iam`). Tiny one-shot CLI: reads system facts through mihi,
-prints a fixed-shape six-line report to stdout, exits 0. No flags
-planned for v1.0 beyond standard `--help` / `--version`.
+prints a fixed-shape report to stdout, exits 0. The shape is six
+required lines (CPU / Memory / Kernel / Host / Distro / Uptime)
+plus an optional seventh (`GPU:`) when an accelerator is detected.
+No flags planned for v1.0 beyond standard `--help` / `--version`.
 
 ## Source
 
@@ -30,10 +33,8 @@ planned for v1.0 beyond standard `--help` / `--version`.
 - `src/uptime.cyr` — `iam_format_uptime` (seconds → "1d 2h 3m" with
   zero-elision + `<1m` floor).
 
-Pending modules:
-
-- M3 will add a `GPU:` line driven by `mihi_gpu_*`. Likely stays
-  inlined in `main.cyr` — single probe, single line.
+GPU line is inlined in `main.cyr` (single probe, single line,
+suppress-on-zero — too small to deserve its own module).
 
 ## Output
 
@@ -45,16 +46,26 @@ Memory: 59 GiB
 Kernel: Linux 7.0.5-arch1-1
 Host:   archaemenid
 Distro: Arch Linux
-Uptime: 1h 58m
+Uptime: 2h 10m
+GPU:    AMD Radeon (PCI 0x1002:0x1638)
 ```
 
-Layout contract (locks at M4 ADR; subject to refinement until then):
+On a GPU-less host (most servers, hosted CI runners) the last line
+is suppressed and the output is six lines instead of seven.
+
+Layout contract (locked by [`docs/adr/0001-output-shape.md`](../adr/0001-output-shape.md);
+freezes at v1.0):
 
 - 8-byte label column (`<label>:` padded with spaces).
 - Single value runs to EOL; no color, no escape sequences (TTY ==
   pipe).
 - Missing value renders as `(unknown)` — never a stderr error,
   never a blank line.
+- The GPU line is the only optional line. Six required labels
+  always appear in their documented order; GPU appends in position
+  7 iff an accelerator is detected.
+- Exit 0 always — probe failure is signaled in `(unknown)`, not
+  the exit code (login MOTD under `set -e` must not be tripped).
 
 ## Tests
 
@@ -91,10 +102,13 @@ invocations and shell login scripts.
 
 ## Next
 
-See [`roadmap.md`](roadmap.md). With M1+M2 in the can, the next
-named milestones are:
+See [`roadmap.md`](roadmap.md). With M4 ADR in the can, the next
+named milestone is:
 
-- **M3** — `GPU:` line driven by `mihi_gpu_*` (mihi already at the
-  required version).
-- **M4** — output-shape ADR locking line order, label format,
-  separator, exit codes. v1.0 contract precursor.
+- **M4 follow-up** (separate bite) — byte-exact tests against a
+  fixed mihi-mock input. Locks the ADR contract into executable
+  form. Requires routing `iam_emit` writes through a caller-buffer
+  or building a mihi shim.
+- **M5** — harden + dogfood pass (security audit, cold-start
+  benchmark < 10ms gate, three-point benchmark trend).
+- **M6** — v1.0.0 cut once mihi 1.0 ships.

@@ -19,4 +19,6 @@ Decisions about iam — what we chose, the context, and the consequences we acce
 
 ## Index
 
-_No ADRs yet. Add the first as `0001-kebab-case-title.md`._
+- [0001 — Output shape](0001-output-shape.md) — line order, label
+  column, fallback policy, optional-GPU rule, no-color / pipe
+  equivalence, exit-0 contract. (Accepted, 2026-05-19.)
