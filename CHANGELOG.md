@@ -4,6 +4,39 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-05-19
+
+M5.5 complete — security + code re-audit. Expanded audit gate
+between v0.6.0 and the v0.9.0 RC: added a web-research pass for
+0days / CVEs against the dep tree and a full source re-walk against
+the M5 audit's findings checklist. v0.7.0 is the milestone-closure
+cut; source `src/*.cyr` is unchanged from v0.6.0 (and from v0.5.0
+before it). F-001 remains the lone v1.0-blocking item — its
+mitigation will land separately ahead of the v0.9.0 RC.
+
+### Added
+- `docs/audit/2026-05-19-m5.5-audit.md` — refreshed audit
+  superseding the M5 doc for the M5.5 scope. Verdict: **pass**, no
+  new findings. Records the dep-tree CVE search (mihi 0.7.0,
+  ai-hwaccel 2.2.6, cyrius 6.0.1, stdlib bundle — all first-party
+  with no public CVE / advisory entries), notes the
+  cyrius ≠ "Cyrus IMAP" / ai-hwaccel ≠ "NVIDIA Container Toolkit"
+  name collisions so future auditors don't have to re-prove the
+  disambiguation, and confirms zero source drift since the v0.5.0
+  audit baseline via `git diff a57c17b..HEAD -- src/`. M5 doc stays
+  in the directory as historical record per audit-trail convention.
+  The `-m5.5-` infix on the filename disambiguates the same-day
+  collision with the M5 audit.
+
+### Changed
+- `docs/development/roadmap.md` — M5.5 marked fully shipped (all
+  three deliverables ✅). M6 (v0.9.0 RC + v1.0) remains gated on
+  F-001 mitigation and mihi 1.0.
+- `docs/development/state.md` — version bumped 0.6.0 → 0.7.0;
+  *Audit* section updated to point at the new M5.5 doc; *Next*
+  section trimmed to F-001 mitigation + M6 (M5.5 closed).
+- `VERSION` — 0.6.0 → 0.7.0.
+
 ## [0.6.0] — 2026-05-19
 
 M5 complete — harden + dogfood. All four M5 deliverables landed

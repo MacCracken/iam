@@ -101,38 +101,44 @@ and M6.
       cycle-marker convention is "next release cuts" → v0.6.0
       IS the marker.
 
-### M5.5 — Security + code re-audit (v0.7.0)
+### M5.5 — Security + code re-audit (v0.7.0) — ✅ shipped 2026-05-19
 
-Expanded audit gate before v0.9.0 RC. The 2026-05-19 audit was
-internal-review only; M5.5 layers in upstream-threat research and
-a fresh code re-review.
+All three M5.5 deliverables landed in one cut. Source `src/*.cyr`
+unchanged from v0.5.0 / v0.6.0; the v0.7.0 release is pure
+audit-trail closure.
 
-- [ ] **Web research**: 0day / CVE check against the dep tree —
-      mihi @ 0.7.0, ai-hwaccel @ 2.2.6, cyrius 6.0.0 toolchain,
-      stdlib modules in use (string, fmt, alloc, io, vec, str,
-      slice, syscalls, assert, agnosys, fs, tagged, process,
-      fnptr, thread, freelist, hashmap, ct, json, bench). Capture
-      findings + sources in the refreshed audit doc.
-- [ ] **Code re-review**: full re-walk of `src/*.cyr` against the
-      M5 audit's findings checklist, with attention to anything
-      that drifted between v0.5.0 and v0.7.0. Confirm F-001 still
-      open (or close it if pre-mitigation lands here), revisit
-      F-002 against latest mihi.
-- [ ] **Refreshed audit doc**: `docs/audit/YYYY-MM-DD-audit.md`
-      supersedes the 2026-05-19 file (which stays in the
-      directory as historical record per audit-trail convention).
-      Conclusion section names v1.0-blocking items vs accepted-risk.
-- **Dep gate**: none (audit is local + read-only).
-- **Acceptance**: refreshed audit doc filed; CVE search returns
-      clean (or each hit has a documented mitigation / risk
-      acceptance); no new findings escalate to v1.0 blockers.
+- ✅ **Web research**: 0day / CVE check against the dep tree —
+      mihi @ 0.7.0, ai-hwaccel @ 2.2.6, cyrius 6.0.1 toolchain,
+      stdlib bundle. **Clean**: no public CVE / advisory entries
+      against any direct dep (all first-party MacCracken
+      projects). Name-collision noise ("Cyrus IMAP" / "Cyrus SASL"
+      for cyrius; "NVIDIA Container Toolkit" CVEs for ai-hwaccel)
+      documented and dismissed. Queries + sources captured in the
+      refreshed audit doc.
+- ✅ **Code re-review**: full re-walk of `src/*.cyr` confirmed
+      zero drift since the v0.5.0 audit baseline
+      (`git diff a57c17b..HEAD -- src/` empty). F-001 confirmed
+      still open, F-002 confirmed still INFO. Build / lint /
+      test / runtime smoke re-verified against v0.6.0 codebase.
+- ✅ **Refreshed audit doc**: `docs/audit/2026-05-19-m5.5-audit.md`
+      filed. Supersedes the 2026-05-19 M5 audit for the M5.5
+      scope; the M5 doc stays in the directory as historical
+      record per audit-trail convention. Conclusion section names
+      F-001 as the lone v1.0 blocker and F-002 as accepted risk.
+      The `-m5.5-` infix disambiguates the same-day collision with
+      the M5 audit filename.
+- **Dep gate**: none (audit was local + read-only).
+- **Acceptance**: refreshed audit doc filed; CVE search returned
+      clean across the dep tree; no new findings escalated to v1.0
+      blockers.
 
 ### M6 — v0.9.0 RC + v1.0.0
 
-- **v0.9.0 RC** cuts when M5.5 audit is clean and F-001 mitigation
-  (TTY-escape sanitization at the renderer boundary) has landed.
-  Last pre-freeze release; sits as the release candidate while we
-  wait for mihi 1.0.
+- **v0.9.0 RC** cuts when F-001 mitigation (TTY-escape sanitization
+  at the renderer boundary) has landed and a follow-up audit
+  confirms the sanitizer's bounds. M5.5 cleared the audit-side
+  prerequisite at v0.7.0. Last pre-freeze release; sits as the
+  release candidate while we wait for mihi 1.0.
 - Pin to mihi 1.0.x (mihi must ship 1.0 first; the dep gate matters)
 - Output shape frozen — ADR 0001 (or ADR 0002 if the proposed
   reorder is accepted before freeze) becomes the v1.0 contract

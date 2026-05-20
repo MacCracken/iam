@@ -5,14 +5,24 @@
 
 ## Version
 
-**0.6.0** — shipped 2026-05-19. M5 complete: cold-start measured
+**0.7.0** — shipped 2026-05-19. M5.5 complete: dep-tree CVE / 0day
+web research returned clean (mihi 0.7.0, ai-hwaccel 2.2.6, cyrius
+6.0.1, stdlib bundle — all first-party, no public CVE or advisory
+entries; name-collision disambiguation against Cyrus IMAP / NVIDIA
+Container Toolkit recorded in the audit doc), full source re-walk
+of `src/*.cyr` against the M5 findings checklist confirmed zero
+drift since v0.5.0 (`git diff a57c17b..HEAD -- src/` empty), and
+the refreshed audit doc filed superseding 2026-05-19 for the M5.5
+scope. Verdict: pass, no new findings; F-001 stays the lone v1.0
+blocker, F-002 stays accepted-risk INFO. Source unchanged from
+v0.6.0 — this is a milestone-closure cut.
+
+**Previous**: 0.6.0 — 2026-05-19. M5 complete: cold-start measured
 at ~1.5 ms on archaemenid (M5 gate < 10 ms, 6.5× headroom),
 three-point benchmark trend captured, P(-1) security audit filed
 with one open finding (F-001) tracked as v1.0 freeze gate, and
-the MOTD-dogfood cycle ran clean from the v0.5.0 cut through the
-v0.6.0 cut across the maintainer's full set of interactive
-terminal sessions. Codebase unchanged from v0.5.0 — this cut is
-pure milestone closure.
+the MOTD-dogfood cycle ran clean across the maintainer's full set
+of interactive terminal sessions. Codebase unchanged from v0.5.0.
 
 **Previous**: 0.5.0 — 2026-05-19. M4 complete: ADR 0001 output-
 shape contract landed and locked into executable form via 39
@@ -132,35 +142,42 @@ this scale.
 
 ## Audit
 
-P(-1) hardening pass filed at
-[`../audit/2026-05-19-audit.md`](../audit/2026-05-19-audit.md).
-**Verdict**: pass with one open item.
+M5.5 refreshed audit at
+[`../audit/2026-05-19-m5.5-audit.md`](../audit/2026-05-19-m5.5-audit.md)
+supersedes the M5 doc
+([`../audit/2026-05-19-audit.md`](../audit/2026-05-19-audit.md))
+for the v0.7.0 scope; the M5 doc stays in the directory as
+historical record. **Verdict**: pass, no new findings.
 
 - **F-001** (OPEN, LOW): TTY-escape sanitization on mihi-returned
-  strings — gate for M6 v1.0 freeze.
+  strings — gate for M6 v1.0 freeze. Carried forward from M5.
 - **F-002** (INFO): `strlen` on mihi cstrings is trust-dependent —
-  cross-link to mihi audit, no iam-side change.
+  cross-link to mihi audit, no iam-side change. Carried forward.
+- **Dep-tree CVE / 0day search**: clean. All direct deps are
+  first-party MacCracken projects with no public CVE / advisory
+  registrations. Cyrus IMAP / NVIDIA Container Toolkit
+  name-collision noise documented and dismissed.
+- **Source re-walk**: zero drift since v0.5.0 audit baseline.
 
 All other categories clean (bounds, exit-code discipline, no
 unsafe syscalls, no env / file / network I/O).
 
 ## Next
 
-See [`roadmap.md`](roadmap.md). With M4 in the can and three of
-four M5 items shipped, the remaining roadmap is:
+See [`roadmap.md`](roadmap.md). With M5.5 closed and the v0.7.0
+audit verdict clean, the remaining roadmap is:
 
-- **M5.5** (v0.7.0) — security + code re-audit. Web research
-  against the dep tree (mihi 0.7.0, ai-hwaccel 2.2.6, cyrius
-  6.0.0, stdlib modules) for 0days / CVEs. Full code re-walk
-  against the 2026-05-19 audit's checklist. Refreshed audit doc
-  supersedes 2026-05-19. Held until maintainer signals start.
-- **F-001 mitigation** — add control-character/escape filter at
-  the renderer boundary; gate on M6 v1.0 freeze. May land in
-  v0.7.0 (if M5.5 work surfaces it) or v0.9.0 RC.
-- **M6** — v0.9.0 RC cuts when M5.5 is clean + F-001 mitigation
-  has landed. v1.0.0 cuts once mihi 1.0 ships and the output
-  shape (ADR 0001 or ADR 0002, depending on reorder acceptance)
-  is frozen.
+- **F-001 mitigation** — add control-character / escape filter at
+  the renderer boundary in `src/display.cyr` (replace bytes
+  `< 0x20` except `\n` with `?`; strip `\x1b` from mihi-returned
+  value buffers inside `iam_render` / `iam_render_buf` /
+  `iam_render_kernel`). Gates the M6 freeze. First code change
+  since v0.5.0 — will trigger a fresh audit pass per the M5.5
+  audit's *Next audit trigger* clause.
+- **M6** — v0.9.0 RC cuts when F-001 mitigation has landed and the
+  follow-up audit is clean. v1.0.0 cuts once mihi 1.0 ships and the
+  output shape (ADR 0001 or ADR 0002, depending on reorder
+  acceptance) is frozen.
 
 Dogfood stays live across all of this — `~/.local/bin/iam` →
 `build/iam`, fired from `~/.zshrc` on every interactive shell.
