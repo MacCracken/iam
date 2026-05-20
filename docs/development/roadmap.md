@@ -109,20 +109,65 @@ cycle* — is time-gated and runs in the background until M6 prep.
 ## Out of scope (for v1.0)
 
 The list keeps future contributors from adding to v1.0 by accident.
-*Most of these are out of scope **forever**, not just for v1.0* —
-they're load-bearing non-features.
+Split into two honest categories: items that would make iam stop
+being iam (the load-bearing non-features), and items that are
+deferred for sequencing reasons and may land in a later cut.
 
-- **Theming engine** — never. The output shape is the contract.
-- **Plugin system** — never.
-- **Configurable output (env vars, dotfiles, flags)** — never.
-- **ASCII logos** — never. Render banners via `BannerManor`.
-- **`--json` / `--csv` output formats** — never. If you need machine-
-  readable system info, consume `mihi` directly; don't shoehorn it
-  into `iam`'s display surface.
-- **Color** — out of scope for v1.0; reconsider for v2.0 if there's
-  user demand. Default plain stays a v1.0 gate.
-- **Caching** — every invocation is a fresh mihi probe. No cache.
-- **Network ANYTHING** — never.
+### Not iam's job (use the right tool)
+
+These would change iam's identity. Adding them turns iam into
+something else (fastfetch, neofetch, a config dumper, a JSON probe).
+If you want one of these, the linked tool already exists.
+
+- **Theming *engine*** (iam shipping theme files, palette variants,
+  per-line color rules, swappable layouts) — not iam's job. That's
+  what neofetch became. iam's contract is "say what the system
+  is," not "look pretty in seventeen ways." *Consuming* shell
+  theming (terminal palette, `NO_COLOR`, prompt-toolkit
+  conventions) is a different conversation and lives in the
+  *Deferred* list below under Color / shell-theme integration.
+- **Plugin system** — iam is a thin presentation layer over mihi.
+  Pluggability lives in mihi (where probes are added) or in a
+  sibling tool that consumes mihi.
+- **Configurable output (env vars, dotfiles, flags)** — the byte
+  contract is the API. Consumers who want a different shape pipe
+  iam through `awk` / `cut` / `jq` like they would `whoami`.
+- **ASCII logos** (distro art, banners, decoration) — iam stays
+  whoami-simple. If you want a banner, `BannerManor` is the
+  sibling tool for that. If you want a distro logo next to your
+  system info, `neofetch` / `fastfetch` already exist and do
+  that well. If you want iam-but-with-a-logo, the GPL-3.0
+  license enables a fork — that's the right release valve, not
+  growing iam's surface.
+- **`--json` / `--csv` output formats** — consume `mihi` directly
+  for machine-readable system info. iam's display surface stays
+  one-fact-per-line plain text.
+- **Caching** — every invocation is a fresh mihi probe. A cache
+  layer would mean iam owns staleness semantics; that complexity
+  belongs in mihi if anywhere.
+
+### Deferred (may reopen later)
+
+These are sequencing decisions, not identity constraints. The
+gating reason is named so a future reader knows when the
+conversation reopens.
+
+- **Color / shell-theme consumption** — deferred to v2.0
+  conversation. The intent is *consuming* the user's existing
+  shell theming (terminal palette via standard escape codes,
+  `NO_COLOR` / `FORCE_COLOR` env conventions, prompt-toolkit
+  semantics) — not iam shipping its own themes. Default-plain
+  stays a v1.0 gate so the byte contract freezes against the
+  no-color baseline; color additions post-v1.0 land as opt-in
+  and preserve plain bytes as the default pipe-target.
+- **Network probes** (e.g. local IP, link state) — deferred until
+  kernel-side bring-up is operational. Adds a real probe surface
+  to mihi first; iam adopts after.
+- **Runtime state** (Battery %, Swap used, Disk used%) — post-v1.0
+  consideration. The v1.0 freeze should ship with the stable
+  identity → kernel → uptime → hardware set; runtime-state lines
+  are the natural v2.0 conversation, additive on top of a frozen
+  base.
 
 ## Cross-references
 

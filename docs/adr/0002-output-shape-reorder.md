@@ -42,14 +42,18 @@ breaking position-anchored parsers, so it got exiled to the end.
 
 **Design goal: similar, not identical.** iam strips out everything
 between fastfetch's Uptime and CPU lines (Packages, Shell, Display,
-WM, Theme, Font, Cursor, Terminal — all configuration, all on the
-[roadmap "Out of scope forever"](../development/roadmap.md) list)
-and everything after Memory (Swap, Disk, Local IP, Battery,
-Locale — runtime/network/config). What's left is fastfetch's
-identity → runtime → hardware spine, with iam's six required lines
-plus GPU sitting in their fastfetch-corresponding slots. A user
-coming from fastfetch sees the same overall layout and knows where
-to look without needing to learn iam's own ordering.
+WM, Theme, Font, Cursor, Terminal — all configuration, on the
+[roadmap "Not iam's job"](../development/roadmap.md#not-iams-job-use-the-right-tool)
+list) and most of what trails Memory (Swap, Disk, Local IP,
+Battery, Locale — a mix of runtime state and config; the runtime-
+state pieces are
+[deferred](../development/roadmap.md#deferred-may-reopen-later)
+post-v1.0, network is deferred until kernel bring-up). What's left
+is fastfetch's identity → runtime → hardware spine, with iam's
+six required lines plus GPU sitting in their fastfetch-
+corresponding slots. A user coming from fastfetch sees the same
+overall layout and knows where to look without needing to learn
+iam's own ordering.
 
 This ADR proposes a single reorder before the M6 v1.0 freeze. After
 v1.0, the byte contract is locked and a change like this would
@@ -282,14 +286,15 @@ doc edits). Cleanly contained in a single cut, candidate for v0.6.0.
 
 - **fastfetch's exact ordering** (OS, Host, Kernel, Uptime,
   Packages, Shell, Display, …, CPU, GPU, Memory, …). Rejected
-  for the middle and tail (Packages / Shell / Display / Swap /
-  Disk / Local IP / Battery / Locale are configuration, runtime,
-  or network — all on the roadmap's "Out of scope forever" list).
-  The *ordering of what remains* is what this ADR adopts: iam's
-  six required lines plus optional GPU sit in their
-  fastfetch-corresponding slots (identity → kernel → uptime →
-  hardware), giving fastfetch users muscle-memory familiarity
-  without iam having to grow fastfetch's surface area.
+  for the middle and tail — Packages / Shell / Display and
+  friends are config (roadmap's "Not iam's job"), the
+  runtime/state items are deferred to post-v1.0, network is
+  deferred until kernel bring-up. The *ordering of what
+  remains* is what this ADR adopts: iam's six required lines
+  plus optional GPU sit in their fastfetch-corresponding slots
+  (identity → kernel → uptime → hardware), giving fastfetch
+  users muscle-memory familiarity without iam having to grow
+  fastfetch's surface area.
 
 - **Uptime trailing** (Distro / Host / Kernel / CPU / GPU /
   Memory / Uptime, as an earlier draft of this ADR proposed).
