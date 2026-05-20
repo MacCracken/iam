@@ -47,18 +47,22 @@ jobs:
 
       - name: Smoke run
         # Run the binary and verify it produces the documented label
-        # set in order. The six required lines (CPU / Memory / Kernel
-        # / Host / Distro / Uptime) are always present; an optional
-        # GPU line trails when mihi detects an accelerator (added in
-        # M3 / v0.4.0). CI runners have no GPU, so this gate expects
-        # exactly 6 lines on hosted runners — but accepts a trailing
-        # `GPU:` line for self-hosted / dev-machine reproducibility.
+        # set in order. The six required lines (Distro / Host /
+        # Kernel / Uptime / CPU / Memory) follow the identity →
+        # runtime → hardware spine per ADR 0002 (which supersedes
+        # ADR 0001 §2-§3 at v0.8.0). An optional GPU line slots
+        # between CPU and Memory when mihi detects an accelerator,
+        # keeping the hardware block contiguous. CI runners have no
+        # GPU, so this gate expects exactly 6 lines on hosted
+        # runners — but accepts the seven-line shape for self-hosted
+        # / dev-machine reproducibility.
         #
         # Output is mihi-probe-driven so the value half changes per
         # runner; we anchor on the label column and order, not values.
-        # The label set + ordering IS the v1.0 contract (locks at M4
-        # ADR). Any change to this list is a Breaking change in
-        # CHANGELOG. Keep this gate aligned with state.md "Output".
+        # The label set + ordering IS the v1.0 contract (ADR 0002
+        # locks the v1.0 shape). Any change to this list is a
+        # Breaking change in CHANGELOG. Keep this gate aligned with
+        # state.md "Output".
         run: |
           ./build/iam > /tmp/iam.out
           lines=$(wc -l < /tmp/iam.out)
@@ -67,7 +71,7 @@ jobs:
             cat /tmp/iam.out
             exit 1
           fi
-          for label in CPU Memory Kernel Host Distro Uptime; do
+          for label in Distro Host Kernel Uptime CPU Memory; do
             if ! grep -qE "^${label}:" /tmp/iam.out; then
               echo "FAIL: no line starting with '${label}:'"
               cat /tmp/iam.out
@@ -76,11 +80,11 @@ jobs:
           done
           # Order check: the labels must appear in the documented
           # sequence — the contract is "shape + order", not just
-          # "shape". Trailing GPU line, if present, must be in
-          # position 7 (after Uptime).
+          # "shape". Optional GPU line, if present, slots between
+          # CPU and Memory (position 6 of 7), not at the tail.
           ord=$(grep -oE '^[A-Za-z]+:' /tmp/iam.out | tr -d ':' | tr '\n' ' ')
-          want6="CPU Memory Kernel Host Distro Uptime "
-          want7="CPU Memory Kernel Host Distro Uptime GPU "
+          want6="Distro Host Kernel Uptime CPU Memory "
+          want7="Distro Host Kernel Uptime CPU GPU Memory "
           if [ "$ord" != "$want6" ] && [ "$ord" != "$want7" ]; then
             echo "FAIL: label order is '$ord'"
             echo "  expected '$want6' (no GPU) or '$want7' (with GPU)"
@@ -138,7 +142,7 @@ jobs:
           # The six required labels must all be present; GPU is
           # accelerator-presence-dependent and excluded from the
           # required set.
-          for label in CPU Memory Kernel Host Distro Uptime; do
+          for label in Distro Host Kernel Uptime CPU Memory; do
             grep -qE "^${label}:" /tmp/iam-dce.out || {
               echo "FAIL: DCE output missing '${label}:' line"
               cat /tmp/iam-dce.out

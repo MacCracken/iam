@@ -69,6 +69,13 @@ consumer count is zero — a v1.0+ change would have been a real
   identity → runtime → hardware spine and the new GPU mid-output
   position. Version section will refresh at the v0.8.0 cut.
 - `VERSION` — 0.7.0 → 0.8.0.
+- `.github/workflows/ci.yml` — Smoke run + DCE parity check
+  expectations updated for the ADR 0002 line order. `want6` /
+  `want7` strings rewritten (`Distro Host Kernel Uptime CPU Memory`
+  for six-line; GPU slotted between CPU and Memory at position 6
+  for seven-line). Required-label loops in both jobs now iterate
+  in the new sequence. Comment block updated to reference ADR 0002
+  + v0.8.0. Caught by the v0.8.0 push CI run.
 
 ### Notes
 - M5 audit (`docs/audit/2026-05-19-audit.md`) and M5.5 audit
