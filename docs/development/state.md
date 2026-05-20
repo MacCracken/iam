@@ -5,14 +5,23 @@
 
 ## Version
 
-**0.5.0** — shipped 2026-05-19. M4 complete: the bytes iam emits
-are a written contract (ADR 0001) locked into executable form via
-39 byte-exact tests. Renderers refactored to write-into-buffer;
+**0.6.0** — shipped 2026-05-19. M5 complete: cold-start measured
+at ~1.5 ms on archaemenid (M5 gate < 10 ms, 6.5× headroom),
+three-point benchmark trend captured, P(-1) security audit filed
+with one open finding (F-001) tracked as v1.0 freeze gate, and
+the MOTD-dogfood cycle ran clean from the v0.5.0 cut through the
+v0.6.0 cut across the maintainer's full set of interactive
+terminal sessions. Codebase unchanged from v0.5.0 — this cut is
+pure milestone closure.
+
+**Previous**: 0.5.0 — 2026-05-19. M4 complete: ADR 0001 output-
+shape contract landed and locked into executable form via 39
+byte-exact tests. Renderers refactored to write-into-buffer;
 driver flushes the whole report with a single syscall.
 
 ## Toolchain
 
-- **Cyrius pin**: `6.0.0` (in `cyrius.cyml [package].cyrius`)
+- **Cyrius pin**: `6.0.1` (in `cyrius.cyml [package].cyrius`)
 
 ## Shape
 
@@ -140,12 +149,19 @@ unsafe syscalls, no env / file / network I/O).
 See [`roadmap.md`](roadmap.md). With M4 in the can and three of
 four M5 items shipped, the remaining roadmap is:
 
-- **M5 tail** — maintainer dogfood **active since 2026-05-19**:
-  symlink at `~/.local/bin/iam` → `build/iam`, wired into
-  `~/.zshrc` (every interactive shell, not just login — max
-  exposure to catch regressions). Adds ~1.5 ms to shell startup
-  on archaemenid (total starship + iam init ~9 ms). Gates the
-  v0.9.0 cut after one release cycle.
+- **M5.5** (v0.7.0) — security + code re-audit. Web research
+  against the dep tree (mihi 0.7.0, ai-hwaccel 2.2.6, cyrius
+  6.0.0, stdlib modules) for 0days / CVEs. Full code re-walk
+  against the 2026-05-19 audit's checklist. Refreshed audit doc
+  supersedes 2026-05-19. Held until maintainer signals start.
 - **F-001 mitigation** — add control-character/escape filter at
-  the renderer boundary before M6 freeze.
-- **M6** — v1.0.0 cut once mihi 1.0 ships.
+  the renderer boundary; gate on M6 v1.0 freeze. May land in
+  v0.7.0 (if M5.5 work surfaces it) or v0.9.0 RC.
+- **M6** — v0.9.0 RC cuts when M5.5 is clean + F-001 mitigation
+  has landed. v1.0.0 cuts once mihi 1.0 ships and the output
+  shape (ADR 0001 or ADR 0002, depending on reorder acceptance)
+  is frozen.
+
+Dogfood stays live across all of this — `~/.local/bin/iam` →
+`build/iam`, fired from `~/.zshrc` on every interactive shell.
+Future cuts auto-propagate via the symlink.

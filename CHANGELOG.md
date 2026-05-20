@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-05-19
+
+M5 complete — harden + dogfood. All four M5 deliverables landed
+against the v0.5.0 codebase; v0.6.0 is the milestone-closure cut.
+Code unchanged from v0.5.0; everything below is docs, audit, and
+process artifacts.
+
 ### Added
 - `docs/benchmarks.md` — invocation-time benchmark methodology and
   three-point trend (v0.3.0 → M3@9df0859 → v0.5.0). M5 < 10 ms
@@ -16,13 +23,47 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   TTY-escape sanitization on mihi-returned strings, LOW — gates
   M6 freeze) and one INFO note (F-002: `strlen` cstring
   invariant cross-referenced to mihi audit).
+- `docs/adr/0002-output-shape-reorder.md` — **Proposed** ADR for
+  a fastfetch-similar top-down line order (Distro → Host →
+  Kernel → Uptime → CPU → GPU? → Memory). Supersedes ADR 0001 §2
+  and §3 if accepted; ADR 0001 §1, §4, §5, §6 carry over
+  unchanged. Decision deferred to a later cut; v0.6.0 ships with
+  ADR 0001's order intact.
+- Dogfood wiring: `~/.local/bin/iam` → `build/iam` symlink,
+  `~/.zshrc` calls `iam` on every interactive shell. Ran clean
+  from v0.5.0 cut through v0.6.0 cut across the maintainer's
+  full set of terminal sessions — no regressions, no shell
+  startup degradation worth complaining about (~9 ms total
+  startup with starship + iam vs ~7 ms without iam).
 
 ### Changed
-- `docs/development/roadmap.md` — M5 marked three-of-four shipped;
-  M6 acceptance now includes F-001 mitigation before the freeze.
-- `docs/development/state.md` — new *Benchmarks* and *Audit*
-  sections; *Next* lists the M5 tail (MOTD dogfood) and F-001
-  mitigation as the path to M6.
+- `docs/development/roadmap.md` — M5 marked fully shipped (all
+  four deliverables ✅). Telescoped the release plan: M5
+  acceptance now cuts as v0.6.0 (was v0.9.0). Added **M5.5**
+  milestone (Security + code re-audit, v0.7.0) between M5 and
+  M6 — expanded audit with web research against the dep tree
+  for 0days / CVEs. M6 now cuts v0.9.0 RC before v1.0.
+- `docs/development/roadmap.md` — "Out of scope (for v1.0)"
+  section restructured. Split into "Not iam's job (use the
+  right tool)" and "Deferred (may reopen later)" — the old
+  flat "never / forever" framing conflated identity constraints
+  with sequencing decisions. Each entry now names the right
+  alternative tool (or the gating reason for the deferral).
+- `docs/development/roadmap.md` — ASCII-logos entry expanded to
+  hand the reader three concrete escape valves (BannerManor,
+  neofetch / fastfetch, GPL-3.0 fork) instead of just one.
+- `docs/development/roadmap.md` — Color / theming entries split
+  honestly: iam *being* a theming engine is identity-rejected,
+  iam *consuming* the user's shell theme is a real post-v1.0
+  conversation.
+- `docs/development/state.md` — version bumped 0.5.0 → 0.6.0;
+  added *Benchmarks* and *Audit* sections; *Next* lists M5.5,
+  F-001 mitigation, and M6 in sequence.
+- `VERSION` — 0.5.0 → 0.6.0.
+- `cyrius.cyml` — toolchain pin bumped 6.0.0 → 6.0.1 to track
+  the active local cycc; build + 90-assertion test suite
+  identical under the new toolchain (no observable behavior
+  change, drift warning resolved).
 
 ## [0.5.0] — 2026-05-19
 

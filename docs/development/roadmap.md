@@ -73,11 +73,12 @@ line write syscalls, which made the contract observable to tests).
 - **Acceptance**: ADR landed; sample output reproducible across
   runs; test suite executes the contract on synthetic inputs.
 
-### M5 — Harden + dogfood (v0.9.0) — 🟡 three of four shipped 2026-05-19
+### M5 — Harden + dogfood (v0.6.0) — ✅ shipped 2026-05-19
 
-Three of M5's four deliverables landed in one cut against v0.5.0.
-The remaining item — *maintainer uses iam in MOTD for one release
-cycle* — is time-gated and runs in the background until M6 prep.
+All four deliverables landed. v0.6.0 cuts on M5 completion; the
+original "v0.9.0 = M5 baseline" plan was telescoped — M5.5
+(security re-audit, v0.7.0) and the v0.9.0 RC now sit between M5
+and M6.
 
 - ✅ Invocation-time benchmark: `iam` cold-start ~1.5 ms on
       archaemenid (M5 gate: < 10 ms). 6.5× headroom — see
@@ -92,18 +93,50 @@ cycle* — is time-gated and runs in the background until M6 prep.
       TTY-escape sanitization on mihi strings, LOW) to address
       before M6 freeze; one INFO note (F-002: strlen invariant
       cross-referenced to mihi audit).
-- ⏳ Maintainer uses `iam` in MOTD for one release cycle —
-      **dogfood live since 2026-05-19** (`~/.local/bin/iam` →
-      `build/iam`, called from `~/.zshrc`, every interactive
-      shell). Gates the v0.9.0 cut once one release cycle has
-      elapsed under daily use.
+- ✅ Maintainer uses `iam` in MOTD for one release cycle —
+      dogfood ran from 2026-05-19 v0.5.0 cut through the v0.6.0
+      cut (`~/.local/bin/iam` → `build/iam`, called from
+      `~/.zshrc`, every interactive shell). No issues observed
+      across the uptime cycle / multi-tab spawn pattern. The
+      cycle-marker convention is "next release cuts" → v0.6.0
+      IS the marker.
 
-### M6 — v1.0.0
+### M5.5 — Security + code re-audit (v0.7.0)
 
+Expanded audit gate before v0.9.0 RC. The 2026-05-19 audit was
+internal-review only; M5.5 layers in upstream-threat research and
+a fresh code re-review.
+
+- [ ] **Web research**: 0day / CVE check against the dep tree —
+      mihi @ 0.7.0, ai-hwaccel @ 2.2.6, cyrius 6.0.0 toolchain,
+      stdlib modules in use (string, fmt, alloc, io, vec, str,
+      slice, syscalls, assert, agnosys, fs, tagged, process,
+      fnptr, thread, freelist, hashmap, ct, json, bench). Capture
+      findings + sources in the refreshed audit doc.
+- [ ] **Code re-review**: full re-walk of `src/*.cyr` against the
+      M5 audit's findings checklist, with attention to anything
+      that drifted between v0.5.0 and v0.7.0. Confirm F-001 still
+      open (or close it if pre-mitigation lands here), revisit
+      F-002 against latest mihi.
+- [ ] **Refreshed audit doc**: `docs/audit/YYYY-MM-DD-audit.md`
+      supersedes the 2026-05-19 file (which stays in the
+      directory as historical record per audit-trail convention).
+      Conclusion section names v1.0-blocking items vs accepted-risk.
+- **Dep gate**: none (audit is local + read-only).
+- **Acceptance**: refreshed audit doc filed; CVE search returns
+      clean (or each hit has a documented mitigation / risk
+      acceptance); no new findings escalate to v1.0 blockers.
+
+### M6 — v0.9.0 RC + v1.0.0
+
+- **v0.9.0 RC** cuts when M5.5 audit is clean and F-001 mitigation
+  (TTY-escape sanitization at the renderer boundary) has landed.
+  Last pre-freeze release; sits as the release candidate while we
+  wait for mihi 1.0.
 - Pin to mihi 1.0.x (mihi must ship 1.0 first; the dep gate matters)
-- Output shape frozen (the M4 ADR becomes contract)
+- Output shape frozen — ADR 0001 (or ADR 0002 if the proposed
+  reorder is accepted before freeze) becomes the v1.0 contract
 - CHANGELOG `Breaking` section for the freeze
-- Resolve audit F-001 (TTY-escape sanitization) before the freeze
 - v1.0.0 cut
 
 ## Out of scope (for v1.0)

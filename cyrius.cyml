@@ -4,7 +4,7 @@ version = "${file:VERSION}"
 description = "iam — fastfetch-equivalent system info display. Pure inverse of whoami: whoami says who the user is, iam says what the system is. Thin presentation over the mihi probe library."
 license = "GPL-3.0-only"
 language = "cyrius"
-cyrius = "6.0.0"
+cyrius = "6.0.1"
 
 [build]
 entry = "src/main.cyr"
