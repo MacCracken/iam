@@ -4,6 +4,54 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-05-20
+
+**Output-shape freeze. M6 closed.** iam reaches the v1.0 contract
+in lockstep with mihi 1.0.0 shipping. Per CLAUDE.md *"v1.0, after
+which the line order, label format, and exit codes are frozen"* —
+ADR 0002's identity → runtime → hardware spine
+(Distro / Host / Kernel / Uptime / CPU / GPU? / Memory) is the
+written contract from this release onward. Any future change to
+line order, label width, label spelling, `(unknown)` fallback, or
+exit-code discipline is a real `Breaking` requiring a major-version
+bump.
+
+No source changes since v0.9.0 RC. The v0.9.0 cut deliberately
+sat as the iam-side freeze candidate while we waited for mihi 1.0;
+the v1.0.0 cut is the documented single-line `[deps.mihi]` repin
+plus the milestone-closure docs/audit work.
+
+### Changed
+- `cyrius.cyml` — `[deps.mihi] tag` 0.7.0 → 1.0.0. mihi 1.0.0's
+  bundle (`dist/mihi.cyr`) is module-content byte-identical to
+  0.7.0 per mihi's own CHANGELOG; the only diff is the
+  `# Version: 1.0.0` header stamp. iam's runtime output is
+  byte-for-byte equal to v0.9.0 RC on archaemenid.
+  `[deps.ai-hwaccel]` stays at 2.2.6 (mihi 1.0.0 pins the same
+  transitive). `[package].cyrius` stays at 6.0.1 (matches mihi
+  1.0.0's pin).
+- `VERSION` — 0.9.0 → 1.0.0.
+
+### Security
+- `docs/audit/2026-05-20-v1.0.0-audit.md` — mandatory
+  mihi-major-bump audit filed per the v0.9.0 audit's *Next audit
+  trigger* clause. Verdict: pass. mihi 0.7.0 → 1.0.0 is a clean
+  repin with frozen probe-API surface; F-001 stays closed, F-002
+  carries as INFO (now formalized by mihi's own v1.0 contract
+  freeze on cstring semantics). External CVE / 0-day research
+  pass clean against the dep tree. Prior audit docs
+  (v0.9.0 / M5.5 / M5) stay in the directory as historical record.
+
+### Notes
+- This is a **shape-and-contract freeze**, not a feature freeze.
+  The roadmap's "Deferred" entries (network probes, runtime
+  state — Battery / Swap / Disk) remain reopenable post-v1.0; any
+  such addition that disturbs the v1.0 line spine becomes a real
+  `Breaking` and requires a major-version bump from here.
+- Dogfood (`~/.local/bin/iam` → `build/iam`, fired from `~/.zshrc`)
+  auto-propagates the new build on the next interactive shell. No
+  manual cutover needed.
+
 ## [0.9.0] — 2026-05-19
 
 **M6 release candidate.** F-001 (TTY-escape sanitization at the

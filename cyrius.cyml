@@ -28,7 +28,7 @@ stdlib = [
 # owns the probes (CLAUDE.md: "Probe via mihi, never inline").
 [deps.mihi]
 git = "https://github.com/MacCracken/mihi.git"
-tag = "0.7.0"
+tag = "1.0.0"
 modules = ["dist/mihi.cyr"]
 
 # ai-hwaccel: pulled in because mihi/gpu.cyr inside dist/mihi.cyr
