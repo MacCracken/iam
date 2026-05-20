@@ -73,18 +73,37 @@ line write syscalls, which made the contract observable to tests).
 - **Acceptance**: ADR landed; sample output reproducible across
   runs; test suite executes the contract on synthetic inputs.
 
-### M5 — Harden + dogfood (v0.9.0)
+### M5 — Harden + dogfood (v0.9.0) — 🟡 three of four shipped 2026-05-19
 
-- Maintainer uses `iam` in MOTD for one release cycle
-- Invocation-time benchmark: `iam` cold-start < 10ms on archaemenid
-- 3-point benchmark trend in `docs/benchmarks.md`
-- P(-1) hardening pass complete — security audit doc filed
+Three of M5's four deliverables landed in one cut against v0.5.0.
+The remaining item — *maintainer uses iam in MOTD for one release
+cycle* — is time-gated and runs in the background until M6 prep.
+
+- ✅ Invocation-time benchmark: `iam` cold-start ~1.5 ms on
+      archaemenid (M5 gate: < 10 ms). 6.5× headroom — see
+      `docs/benchmarks.md`.
+- ✅ 3-point benchmark trend in `docs/benchmarks.md` —
+      v0.3.0 (~555 µs, pre-GPU) → M3@9df0859 (~1514 µs, +GPU
+      probe) → v0.5.0 (~1511 µs, +single-flush). Trend caught the
+      GPU probe as the dominant cost; M4 single-flush refactor
+      was nominal at this scale (recorded honestly).
+- ✅ P(-1) hardening pass — security audit filed at
+      `docs/audit/2026-05-19-audit.md`. One open finding (F-001:
+      TTY-escape sanitization on mihi strings, LOW) to address
+      before M6 freeze; one INFO note (F-002: strlen invariant
+      cross-referenced to mihi audit).
+- ⏳ Maintainer uses `iam` in MOTD for one release cycle —
+      **dogfood live since 2026-05-19** (`~/.local/bin/iam` →
+      `build/iam`, called from `~/.zshrc`, every interactive
+      shell). Gates the v0.9.0 cut once one release cycle has
+      elapsed under daily use.
 
 ### M6 — v1.0.0
 
 - Pin to mihi 1.0.x (mihi must ship 1.0 first; the dep gate matters)
 - Output shape frozen (the M4 ADR becomes contract)
 - CHANGELOG `Breaking` section for the freeze
+- Resolve audit F-001 (TTY-escape sanitization) before the freeze
 - v1.0.0 cut
 
 ## Out of scope (for v1.0)

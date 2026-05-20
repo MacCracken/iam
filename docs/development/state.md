@@ -105,12 +105,47 @@ mihi pin floats up through 1.0; the M6 v1.0.0 gate pins to mihi
 _None yet._ iam is end-user-facing; "consumers" are user MOTD
 invocations and shell login scripts.
 
+## Benchmarks
+
+Three-point cold-start trend captured 2026-05-19 on archaemenid
+(median of three N=500 batches per build, full methodology in
+[`../benchmarks.md`](../benchmarks.md)):
+
+| Build              | Per-invocation | Lines |
+| ------------------ | --------------:| -----:|
+| v0.3.0 (M1+M2)     |      ~555 µs   |     6 |
+| M3 @ 9df0859       |     ~1514 µs   |     7 |
+| v0.5.0 (M4)        |     ~1511 µs   |     7 |
+
+M5 < 10 ms cold-start gate met with ~6.5× headroom. GPU probe (M3)
+is the dominant cost; single-flush refactor (M4) was nominal at
+this scale.
+
+## Audit
+
+P(-1) hardening pass filed at
+[`../audit/2026-05-19-audit.md`](../audit/2026-05-19-audit.md).
+**Verdict**: pass with one open item.
+
+- **F-001** (OPEN, LOW): TTY-escape sanitization on mihi-returned
+  strings — gate for M6 v1.0 freeze.
+- **F-002** (INFO): `strlen` on mihi cstrings is trust-dependent —
+  cross-link to mihi audit, no iam-side change.
+
+All other categories clean (bounds, exit-code discipline, no
+unsafe syscalls, no env / file / network I/O).
+
 ## Next
 
-See [`roadmap.md`](roadmap.md). With M4 fully in the can, the
-remaining roadmap is:
+See [`roadmap.md`](roadmap.md). With M4 in the can and three of
+four M5 items shipped, the remaining roadmap is:
 
-- **M5** — harden + dogfood pass (security audit, cold-start
-  benchmark < 10ms gate, three-point benchmark trend, maintainer-
-  uses-iam-in-MOTD for one cycle).
+- **M5 tail** — maintainer dogfood **active since 2026-05-19**:
+  symlink at `~/.local/bin/iam` → `build/iam`, wired into
+  `~/.zshrc` (every interactive shell, not just login — max
+  exposure to catch regressions). Adds ~1.5 ms to shell startup
+  on archaemenid (total starship + iam init ~9 ms). Gates the
+  v0.9.0 cut after one release cycle.
+- **F-001 mitigation** — add control-character/escape filter at
+  the renderer boundary before M6 freeze.
 - **M6** — v1.0.0 cut once mihi 1.0 ships.

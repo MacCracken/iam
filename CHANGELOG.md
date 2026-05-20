@@ -4,6 +4,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+- `docs/benchmarks.md` — invocation-time benchmark methodology and
+  three-point trend (v0.3.0 → M3@9df0859 → v0.5.0). M5 < 10 ms
+  cold-start gate verified: ~1.5 ms on archaemenid, 6.5× headroom.
+  Trend identifies the M3 GPU probe as the dominant cost and
+  records that the M4 single-flush refactor was nominal at this
+  scale.
+- `docs/audit/2026-05-19-audit.md` — P(-1) security audit pass
+  against v0.5.0. Verdict: pass with one open finding (F-001:
+  TTY-escape sanitization on mihi-returned strings, LOW — gates
+  M6 freeze) and one INFO note (F-002: `strlen` cstring
+  invariant cross-referenced to mihi audit).
+
+### Changed
+- `docs/development/roadmap.md` — M5 marked three-of-four shipped;
+  M6 acceptance now includes F-001 mitigation before the freeze.
+- `docs/development/state.md` — new *Benchmarks* and *Audit*
+  sections; *Next* lists the M5 tail (MOTD dogfood) and F-001
+  mitigation as the path to M6.
+
 ## [0.5.0] — 2026-05-19
 
 M4 complete — output-shape ADR landed and locked into executable
