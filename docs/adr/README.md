@@ -21,4 +21,8 @@ Decisions about iam — what we chose, the context, and the consequences we acce
 
 - [0001 — Output shape](0001-output-shape.md) — line order, label
   column, fallback policy, optional-GPU rule, no-color / pipe
-  equivalence, exit-0 contract. (Accepted, 2026-05-19.)
+  equivalence, exit-0 contract. (Superseded by 0002, 2026-05-19.)
+- [0002 — Output shape reorder](0002-output-shape-reorder.md) —
+  identity → runtime → hardware spine (Distro / Host / Kernel /
+  Uptime / CPU / GPU? / Memory). Supersedes ADR 0001 §2-§3 only;
+  §1, §4, §5, §6 carry over unchanged. (Accepted, 2026-05-19.)

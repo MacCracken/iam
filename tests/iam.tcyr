@@ -7,8 +7,9 @@
 # layout logic against fixed inputs.
 #
 # Byte-exact tests against synthetic values (no mihi probes) are
-# the executable form of docs/adr/0001-output-shape.md. Any change
-# to the contract has to land here and in the ADR or both.
+# the executable form of docs/adr/0002-output-shape-reorder.md
+# (which supersedes ADR 0001 §2-§3). Any change to the contract
+# has to land here and in the ADR or both.
 #
 # Stdlib auto-included via cyrius.cyml.
 
@@ -111,9 +112,9 @@ fn main() {
     assert_eq(n, 0, "cap=3 for \"1d 2h 3m\" rejects");
 
     # ----- iam_render — per-label padding ----------------------------
-    # ADR 0001 §1: every line has an 8-byte label column. Each of the
-    # seven labels gets its own assertion to lock the pad width
-    # against accidental drift.
+    # ADR 0001 §1 (carried over by 0002): every line has an 8-byte
+    # label column. Each of the seven labels gets its own assertion
+    # to lock the pad width against accidental drift.
     test_group("display.cyr — iam_render label column (ADR 0001 §1)");
     var rb[256];
     n = iam_render(&rb, 256, "CPU", "Intel Core i9");
@@ -135,6 +136,7 @@ fn main() {
     # Probe returned 0 (null cstring) → emit "(unknown)" in value
     # column. Required-label lines are NEVER suppressed on probe
     # failure; the contract is "always six lines, always in order".
+    # ADR 0001 §4 carries over unchanged under ADR 0002.
     test_group("display.cyr — iam_render unknown fallback (ADR 0001 §4)");
     n = iam_render(&rb, 256, "CPU", 0);
     assert_buf_eq(&rb, n, "CPU:    (unknown)\n", "CPU + value=0 → (unknown)");
@@ -173,33 +175,52 @@ fn main() {
     n = iam_render_kernel(&rb, 256, "Kernel", "Linux", 0);
     assert_buf_eq(&rb, n, "Kernel: (unknown)\n", "kernel version=0 → unknown");
 
-    # ----- Full ADR-contract output (ADR 0001 §2) -------------------
+    # ----- Full ADR-contract output (ADR 0002 §2) -------------------
     # Six-line canonical shape — every required label in order, no
     # GPU line. Mirrors what `./build/iam` emits on a GPU-less box.
+    # Order: identity (Distro / Host) → runtime (Kernel / Uptime) →
+    # hardware (CPU / Memory) per ADR 0002.
     test_group("display.cyr — ADR-contract assembled output (six lines)");
     var out[1024];
     var pos = 0;
-    var r6 = iam_render(&out + pos, 1024 - pos, "CPU", "Test CPU");
-    pos = pos + r6;
-    r6 = iam_render_buf(&out + pos, 1024 - pos, "Memory", "16 GiB", 6);
-    pos = pos + r6;
-    r6 = iam_render_kernel(&out + pos, 1024 - pos, "Kernel", "Linux", "1.0.0");
+    var r6 = iam_render(&out + pos, 1024 - pos, "Distro", "Test OS");
     pos = pos + r6;
     r6 = iam_render(&out + pos, 1024 - pos, "Host", "testbox");
     pos = pos + r6;
-    r6 = iam_render(&out + pos, 1024 - pos, "Distro", "Test OS");
+    r6 = iam_render_kernel(&out + pos, 1024 - pos, "Kernel", "Linux", "1.0.0");
     pos = pos + r6;
     r6 = iam_render_buf(&out + pos, 1024 - pos, "Uptime", "1d 2h 3m", 8);
     pos = pos + r6;
-    var six_line = "CPU:    Test CPU\nMemory: 16 GiB\nKernel: Linux 1.0.0\nHost:   testbox\nDistro: Test OS\nUptime: 1d 2h 3m\n";
+    r6 = iam_render(&out + pos, 1024 - pos, "CPU", "Test CPU");
+    pos = pos + r6;
+    r6 = iam_render_buf(&out + pos, 1024 - pos, "Memory", "16 GiB", 6);
+    pos = pos + r6;
+    var six_line = "Distro: Test OS\nHost:   testbox\nKernel: Linux 1.0.0\nUptime: 1d 2h 3m\nCPU:    Test CPU\nMemory: 16 GiB\n";
     assert_buf_eq(&out, pos, six_line, "six-line ADR-contract assembly");
 
-    # Seven-line variant — GPU line appended at position 7.
+    # Seven-line variant — GPU line slots between CPU and Memory
+    # (ADR 0002 §3) so the hardware block stays contiguous. We build
+    # a fresh buffer here rather than appending to the six-line `out`
+    # because GPU goes mid-output, not at the tail.
     test_group("display.cyr — ADR-contract assembled output (seven lines)");
-    var r7 = iam_render(&out + pos, 1024 - pos, "GPU", "Test GPU");
-    pos = pos + r7;
-    var seven_line = "CPU:    Test CPU\nMemory: 16 GiB\nKernel: Linux 1.0.0\nHost:   testbox\nDistro: Test OS\nUptime: 1d 2h 3m\nGPU:    Test GPU\n";
-    assert_buf_eq(&out, pos, seven_line, "seven-line ADR-contract assembly");
+    var out7[1024];
+    var pos7 = 0;
+    var r7 = iam_render(&out7 + pos7, 1024 - pos7, "Distro", "Test OS");
+    pos7 = pos7 + r7;
+    r7 = iam_render(&out7 + pos7, 1024 - pos7, "Host", "testbox");
+    pos7 = pos7 + r7;
+    r7 = iam_render_kernel(&out7 + pos7, 1024 - pos7, "Kernel", "Linux", "1.0.0");
+    pos7 = pos7 + r7;
+    r7 = iam_render_buf(&out7 + pos7, 1024 - pos7, "Uptime", "1d 2h 3m", 8);
+    pos7 = pos7 + r7;
+    r7 = iam_render(&out7 + pos7, 1024 - pos7, "CPU", "Test CPU");
+    pos7 = pos7 + r7;
+    r7 = iam_render(&out7 + pos7, 1024 - pos7, "GPU", "Test GPU");
+    pos7 = pos7 + r7;
+    r7 = iam_render_buf(&out7 + pos7, 1024 - pos7, "Memory", "16 GiB", 6);
+    pos7 = pos7 + r7;
+    var seven_line = "Distro: Test OS\nHost:   testbox\nKernel: Linux 1.0.0\nUptime: 1d 2h 3m\nCPU:    Test CPU\nGPU:    Test GPU\nMemory: 16 GiB\n";
+    assert_buf_eq(&out7, pos7, seven_line, "seven-line ADR-contract assembly");
 
     # ----- Degraded-probe assembled output --------------------------
     # All-probe-failure scenario: every required line renders as
@@ -208,19 +229,19 @@ fn main() {
     test_group("display.cyr — degraded-probe output");
     var dout[1024];
     var dpos = 0;
-    var dr = iam_render(&dout + dpos, 1024 - dpos, "CPU", 0);
-    dpos = dpos + dr;
-    dr = iam_render_buf(&dout + dpos, 1024 - dpos, "Memory", dout, 0);
-    dpos = dpos + dr;
-    dr = iam_render(&dout + dpos, 1024 - dpos, "Kernel", 0);
+    var dr = iam_render(&dout + dpos, 1024 - dpos, "Distro", 0);
     dpos = dpos + dr;
     dr = iam_render(&dout + dpos, 1024 - dpos, "Host", 0);
     dpos = dpos + dr;
-    dr = iam_render(&dout + dpos, 1024 - dpos, "Distro", 0);
+    dr = iam_render(&dout + dpos, 1024 - dpos, "Kernel", 0);
     dpos = dpos + dr;
     dr = iam_render_buf(&dout + dpos, 1024 - dpos, "Uptime", dout, 0);
     dpos = dpos + dr;
-    var degraded = "CPU:    (unknown)\nMemory: (unknown)\nKernel: (unknown)\nHost:   (unknown)\nDistro: (unknown)\nUptime: (unknown)\n";
+    dr = iam_render(&dout + dpos, 1024 - dpos, "CPU", 0);
+    dpos = dpos + dr;
+    dr = iam_render_buf(&dout + dpos, 1024 - dpos, "Memory", dout, 0);
+    dpos = dpos + dr;
+    var degraded = "Distro: (unknown)\nHost:   (unknown)\nKernel: (unknown)\nUptime: (unknown)\nCPU:    (unknown)\nMemory: (unknown)\n";
     assert_buf_eq(&dout, dpos, degraded, "all-probe-failure six-line shape");
 
     return assert_summary();

@@ -3,7 +3,8 @@
 # Six required labeled lines plus an optional GPU line, accumulated
 # into one output buffer and flushed with a single write syscall.
 # Line order, label format, and the `(unknown)` fallback policy are
-# locked at docs/adr/0001-output-shape.md.
+# locked at docs/adr/0002-output-shape-reorder.md (which supersedes
+# ADR 0001 §2-§3; ADR 0001 §1, §4, §5, §6 carry over unchanged).
 #
 # Design principle: NO theming engine, NO plugin system, NO
 # configurable output. `whoami` prints the user; `iam` prints the
@@ -70,48 +71,51 @@ fn main() {
 
     # Accumulate the seven possible lines into one output buffer,
     # then flush with a single write syscall. Order matches the
-    # ADR 0001 contract; the optional GPU line conditionally
-    # appends at position 7.
+    # ADR 0002 contract — identity → runtime → hardware spine:
+    # Distro / Host / Kernel / Uptime / CPU / GPU? / Memory. The
+    # optional GPU line slots between CPU and Memory so the
+    # hardware block stays contiguous.
     var out[4096];
     var pos = 0;
     var n = 0;
 
-    n = iam_render(&out + pos, IAM_OUT_CAP - pos, "CPU", cpu);
-    if (n > 0) { pos = pos + n; }
-
-    n = iam_render_buf(&out + pos, IAM_OUT_CAP - pos, "Memory", &memout, mlen);
+    n = iam_render(&out + pos, IAM_OUT_CAP - pos, "Distro", distro);
     if (n > 0) { pos = pos + n; }
 
     if (uok == 1) {
+        n = iam_render(&out + pos, IAM_OUT_CAP - pos, "Host", mihi_hostname(&uts));
+        if (n > 0) { pos = pos + n; }
         n = iam_render_kernel(&out + pos, IAM_OUT_CAP - pos,
                               "Kernel", mihi_kernel_name(&uts),
                               mihi_kernel_version(&uts));
         if (n > 0) { pos = pos + n; }
-        n = iam_render(&out + pos, IAM_OUT_CAP - pos, "Host", mihi_hostname(&uts));
-        if (n > 0) { pos = pos + n; }
     } else {
-        n = iam_render(&out + pos, IAM_OUT_CAP - pos, "Kernel", 0);
-        if (n > 0) { pos = pos + n; }
         n = iam_render(&out + pos, IAM_OUT_CAP - pos, "Host", 0);
         if (n > 0) { pos = pos + n; }
+        n = iam_render(&out + pos, IAM_OUT_CAP - pos, "Kernel", 0);
+        if (n > 0) { pos = pos + n; }
     }
-
-    n = iam_render(&out + pos, IAM_OUT_CAP - pos, "Distro", distro);
-    if (n > 0) { pos = pos + n; }
 
     n = iam_render_buf(&out + pos, IAM_OUT_CAP - pos, "Uptime", &upout, ulen);
     if (n > 0) { pos = pos + n; }
 
-    # Optional GPU line — suppressed entirely when mihi_gpu_count is
-    # 0 (not an error: most servers and CI runners have no
-    # accelerator). On count >= 1 we emit the first device; multi-GPU
-    # boxes are rare enough that iam stays whoami-simple here (ADR
-    # 0001 alternatives-considered).
+    n = iam_render(&out + pos, IAM_OUT_CAP - pos, "CPU", cpu);
+    if (n > 0) { pos = pos + n; }
+
+    # Optional GPU line — slotted between CPU and Memory to keep the
+    # hardware block contiguous. Suppressed entirely when
+    # mihi_gpu_count is 0 (not an error: most servers and CI runners
+    # have no accelerator). On count >= 1 we emit the first device;
+    # multi-GPU boxes are rare enough that iam stays whoami-simple
+    # here (ADR 0002 alternatives-considered).
     var ngpu = mihi_gpu_count();
     if (ngpu > 0) {
         n = iam_render(&out + pos, IAM_OUT_CAP - pos, "GPU", mihi_gpu_name(0));
         if (n > 0) { pos = pos + n; }
     }
+
+    n = iam_render_buf(&out + pos, IAM_OUT_CAP - pos, "Memory", &memout, mlen);
+    if (n > 0) { pos = pos + n; }
 
     # Single flush — one write syscall for the whole report. The
     # ADR's "TTY == pipe" guarantee is automatic: no per-stream

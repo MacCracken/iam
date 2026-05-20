@@ -140,9 +140,11 @@ audit-trail closure.
   prerequisite at v0.7.0. Last pre-freeze release; sits as the
   release candidate while we wait for mihi 1.0.
 - Pin to mihi 1.0.x (mihi must ship 1.0 first; the dep gate matters)
-- Output shape frozen — ADR 0001 (or ADR 0002 if the proposed
-  reorder is accepted before freeze) becomes the v1.0 contract
-- CHANGELOG `Breaking` section for the freeze
+- Output shape frozen — ADR 0002 becomes the v1.0 contract
+  (accepted at v0.8.0; identity → runtime → hardware spine). ADR 0001
+  carries through for §1, §4, §5, §6.
+- CHANGELOG `Breaking` section for the freeze (post-freeze, output-
+  shape changes leave the pre-v1.0 grace zone for good)
 - v1.0.0 cut
 
 ## Out of scope (for v1.0)

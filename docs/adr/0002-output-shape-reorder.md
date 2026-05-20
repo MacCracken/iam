@@ -1,8 +1,8 @@
 # 0002 — Output shape (reorder for fastfetch-similar top-down layout)
 
-**Status**: Proposed
+**Status**: Accepted (2026-05-19)
 **Date**: 2026-05-19
-**Supersedes**: [0001](0001-output-shape.md)
+**Supersedes**: [0001](0001-output-shape.md) §2-§3 (line order and optional-line policy). ADR 0001 §1, §4, §5, §6 carry over unchanged.
 
 ## Context
 

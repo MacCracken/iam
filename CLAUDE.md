@@ -114,6 +114,7 @@ what it *doesn't* do.
 - [`docs/examples/`](docs/examples/) — Sample outputs
 - [`docs/development/state.md`](docs/development/state.md) — Live state snapshot
 - [`docs/development/roadmap.md`](docs/development/roadmap.md) — Milestones through v1.0
+- [`docs/doc-health.md`](docs/doc-health.md) — Doc-currency ledger (fresh / stale / evergreen / open-question per file)
 
 Full doc-tree convention: [first-party-documentation.md](https://github.com/MacCracken/agnosticos/blob/main/docs/development/planning/first-party-documentation.md).
 

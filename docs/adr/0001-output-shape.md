@@ -1,7 +1,14 @@
 # 0001 — Output shape
 
-**Status**: Accepted
+**Status**: Superseded by [0002](0002-output-shape-reorder.md) (2026-05-19)
 **Date**: 2026-05-19
+
+> §2 (line order) and §3 (optional-line policy) are superseded by
+> ADR 0002 — output now follows the identity → runtime → hardware
+> spine (Distro / Host / Kernel / Uptime / CPU / GPU? / Memory). §1
+> (label column), §4 (`(unknown)` fallback), §5 (no color, TTY ==
+> pipe), and §6 (exit 0) carry over unchanged and remain canonical
+> here. Body left intact below as the historical record.
 
 ## Context
 

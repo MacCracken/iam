@@ -5,17 +5,25 @@
 
 ## Version
 
-**0.7.0** — shipped 2026-05-19. M5.5 complete: dep-tree CVE / 0day
-web research returned clean (mihi 0.7.0, ai-hwaccel 2.2.6, cyrius
-6.0.1, stdlib bundle — all first-party, no public CVE or advisory
-entries; name-collision disambiguation against Cyrus IMAP / NVIDIA
-Container Toolkit recorded in the audit doc), full source re-walk
-of `src/*.cyr` against the M5 findings checklist confirmed zero
-drift since v0.5.0 (`git diff a57c17b..HEAD -- src/` empty), and
-the refreshed audit doc filed superseding 2026-05-19 for the M5.5
-scope. Verdict: pass, no new findings; F-001 stays the lone v1.0
-blocker, F-002 stays accepted-risk INFO. Source unchanged from
-v0.6.0 — this is a milestone-closure cut.
+**0.8.0** — shipped 2026-05-19. ADR 0002 accepted: output-shape
+reorder lands. Line order moves from the v0.3.0-era CPU-first
+ordering to the identity → runtime → hardware spine (Distro / Host
+/ Kernel / Uptime / CPU / GPU? / Memory), with the optional GPU
+line now slotted between CPU and Memory instead of trailing at
+position 7. `src/main.cyr` accumulation block reordered (probe
+calls unchanged); 39 ADR-contract byte-exact tests regenerated;
+`docs/examples/sample-output.txt` regenerated. **Breaking
+(pre-v1.0)** by intent — done now while consumer count is zero per
+audit-trail; same change post-v1.0 would have been a freeze
+violation. ADR 0001 marked `Superseded by 0002`; §1, §4, §5, §6
+carry over. F-001 still the lone v1.0 blocker; this is the first
+source change since v0.5.0, so the M5.5 audit's *Next audit
+trigger* clause is now armed for the F-001-mitigation cut.
+
+**Previous**: 0.7.0 — 2026-05-19. M5.5 complete: dep-tree CVE / 0day
+web research returned clean, full source re-walk against the M5
+findings checklist confirmed zero drift since v0.5.0, refreshed
+audit doc filed. Source unchanged from v0.6.0.
 
 **Previous**: 0.6.0 — 2026-05-19. M5 complete: cold-start measured
 at ~1.5 ms on archaemenid (M5 gate < 10 ms, 6.5× headroom),
@@ -37,8 +45,10 @@ driver flushes the whole report with a single syscall.
 
 Binary (`iam`). Tiny one-shot CLI: reads system facts through mihi,
 prints a fixed-shape report to stdout, exits 0. The shape is six
-required lines (CPU / Memory / Kernel / Host / Distro / Uptime)
-plus an optional seventh (`GPU:`) when an accelerator is detected.
+required lines (Distro / Host / Kernel / Uptime / CPU / Memory)
+plus an optional `GPU:` line slotted between CPU and Memory when an
+accelerator is detected — identity → runtime → hardware spine per
+[`docs/adr/0002-output-shape-reorder.md`](../adr/0002-output-shape-reorder.md).
 No flags planned for v1.0 beyond standard `--help` / `--version`.
 
 ## Source
@@ -60,29 +70,34 @@ No flags planned for v1.0 beyond standard `--help` / `--version`.
 Current sample (on archaemenid, 2026-05-19):
 
 ```
-CPU:    AMD Ryzen 7 5800H with Radeon Graphics
-Memory: 59 GiB
-Kernel: Linux 7.0.5-arch1-1
-Host:   archaemenid
 Distro: Arch Linux
-Uptime: 2h 10m
+Host:   archaemenid
+Kernel: Linux 7.0.5-arch1-1
+Uptime: 33m
+CPU:    AMD Ryzen 7 5800H with Radeon Graphics
 GPU:    AMD Radeon (PCI 0x1002:0x1638)
+Memory: 59 GiB
 ```
 
-On a GPU-less host (most servers, hosted CI runners) the last line
-is suppressed and the output is six lines instead of seven.
+On a GPU-less host (most servers, hosted CI runners) the GPU line
+is suppressed and `Memory` slides up to position 6; the output is
+six lines instead of seven.
 
-Layout contract (locked by [`docs/adr/0001-output-shape.md`](../adr/0001-output-shape.md);
-freezes at v1.0):
+Layout contract (locked by [`docs/adr/0002-output-shape-reorder.md`](../adr/0002-output-shape-reorder.md),
+which supersedes ADR 0001 §2-§3; ADR 0001 §1, §4, §5, §6 carry over
+unchanged. Freezes at v1.0):
 
 - 8-byte label column (`<label>:` padded with spaces).
+- Identity → runtime → hardware spine: Distro / Host / Kernel /
+  Uptime / CPU / Memory.
 - Single value runs to EOL; no color, no escape sequences (TTY ==
   pipe).
 - Missing value renders as `(unknown)` — never a stderr error,
   never a blank line.
 - The GPU line is the only optional line. Six required labels
-  always appear in their documented order; GPU appends in position
-  7 iff an accelerator is detected.
+  always appear in their documented order; GPU slots between CPU
+  and Memory iff an accelerator is detected, keeping the hardware
+  block contiguous.
 - Exit 0 always — probe failure is signaled in `(unknown)`, not
   the exit code (login MOTD under `set -e` must not be tripped).
 
@@ -164,20 +179,21 @@ unsafe syscalls, no env / file / network I/O).
 
 ## Next
 
-See [`roadmap.md`](roadmap.md). With M5.5 closed and the v0.7.0
-audit verdict clean, the remaining roadmap is:
+See [`roadmap.md`](roadmap.md). With ADR 0002 accepted and the
+output-shape contract reordered at v0.8.0, the remaining roadmap is:
 
 - **F-001 mitigation** — add control-character / escape filter at
   the renderer boundary in `src/display.cyr` (replace bytes
   `< 0x20` except `\n` with `?`; strip `\x1b` from mihi-returned
   value buffers inside `iam_render` / `iam_render_buf` /
-  `iam_render_kernel`). Gates the M6 freeze. First code change
-  since v0.5.0 — will trigger a fresh audit pass per the M5.5
-  audit's *Next audit trigger* clause.
+  `iam_render_kernel`). Gates the M6 freeze. v0.8.0 was the first
+  source change since v0.5.0 (the reorder), so the M5.5 audit's
+  *Next audit trigger* clause is now armed — the F-001 cut should
+  bundle a follow-up audit confirming the new output-shape code +
+  the sanitizer's bounds.
 - **M6** — v0.9.0 RC cuts when F-001 mitigation has landed and the
-  follow-up audit is clean. v1.0.0 cuts once mihi 1.0 ships and the
-  output shape (ADR 0001 or ADR 0002, depending on reorder
-  acceptance) is frozen.
+  follow-up audit is clean. v1.0.0 cuts once mihi 1.0 ships; the
+  v1.0 byte contract is now the ADR 0002 shape.
 
 Dogfood stays live across all of this — `~/.local/bin/iam` →
 `build/iam`, fired from `~/.zshrc` on every interactive shell.
