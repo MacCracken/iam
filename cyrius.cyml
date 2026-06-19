@@ -4,7 +4,7 @@ version = "${file:VERSION}"
 description = "iam — fastfetch-equivalent system info display. Pure inverse of whoami: whoami says who the user is, iam says what the system is. Thin presentation over the mihi probe library."
 license = "GPL-3.0-only"
 language = "cyrius"
-cyrius = "6.0.1"
+cyrius = "6.2.22"
 
 [build]
 entry = "src/main.cyr"
@@ -17,10 +17,19 @@ output = "iam"
 # `include "lib/mihi.cyr"` pulls in gpu.cyr which references
 # ai-hwaccel symbols — the parser needs the full chain present;
 # DCE drops unused code from the linked binary.
+#
+# 6.2.x stdlib reorg (tracks mihi 1.1.1's cyrius.cyml):
+#   - `agnosys` left the stdlib and is now a proper git dependency
+#     ([deps.agnosys] below) — mihi 1.1.1's bundle reads uname/sysinfo
+#     through agnosys_uname, so the agnosys-core bundle must be present.
+#   - `json` was carved out of the stdlib into the bundled `bayan`
+#     distribution and folded back byte-identical via sandhi. mihi's
+#     `registry_to_json` symbols resolve through bayan's back-compat
+#     aliases, so `json` → `bayan` here.
 stdlib = [
     "string", "fmt", "alloc", "io", "vec", "str", "slice",
-    "syscalls", "assert", "agnosys", "fs", "tagged", "process",
-    "fnptr", "thread", "freelist", "hashmap", "ct", "json", "bench",
+    "syscalls", "assert", "fs", "tagged", "process",
+    "fnptr", "thread", "freelist", "hashmap", "ct", "bayan", "bench",
 ]
 
 # mihi: the system-info probe library. Every displayed line routes
@@ -28,12 +37,25 @@ stdlib = [
 # owns the probes (CLAUDE.md: "Probe via mihi, never inline").
 [deps.mihi]
 git = "https://github.com/MacCracken/mihi.git"
-tag = "1.0.0"
+tag = "1.1.1"
 modules = ["dist/mihi.cyr"]
+
+# agnosys: kernel-interface lib wrapping uname / sysinfo with Result-based
+# error handling. New transitive as of mihi 1.1.1 — mihi's identity probes
+# (kernel_name / kernel_version / cpu_arch / hostname) share one syscall
+# through agnosys_uname, so dist/mihi.cyr references agnosys symbols and the
+# core bundle must be present at parse time. Pin matches mihi 1.1.1's own
+# [deps.agnosys] transitive (1.4.0 = first release with the AGNOS build
+# target: uname#34 / sysinfo#35). Only the AGNOS-portable `core` bundle is
+# pulled; the Linux-only security/storage/trust profiles are not needed.
+[deps.agnosys]
+git = "https://github.com/MacCracken/agnosys.git"
+tag = "1.4.0"
+modules = ["dist/agnosys-core.cyr"]
 
 # ai-hwaccel: pulled in because mihi/gpu.cyr inside dist/mihi.cyr
 # references registry_detect_no_exec / profile_* / FAMILY_CPU. Pin
-# matches mihi 0.7.0's transitive (mihi's own [deps.ai-hwaccel]).
+# matches mihi 1.1.1's transitive (mihi's own [deps.ai-hwaccel]).
 [deps.ai-hwaccel]
 git = "https://github.com/MacCracken/ai-hwaccel.git"
 tag = "2.2.6"

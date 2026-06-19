@@ -4,6 +4,40 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-06-18 (toolchain + dep refresh)
+
+### Changed
+
+- **`[package].cyrius` 6.0.1 → 6.2.22.** Adopts the 6.2.x stdlib
+  reorg (below); matches mihi 1.1.1's own toolchain pin.
+- **`[deps.mihi] tag` 1.0.0 → 1.1.1.** mihi's identity probes now
+  read `uname` / `sysinfo` through `agnosys_uname`, so the bundle
+  (`dist/mihi.cyr`) references agnosys symbols — see the new dep
+  below. `[deps.ai-hwaccel]` stays at **2.2.6** (mihi 1.1.1 pins the
+  same transitive; the 2.3.x line is not what mihi references).
+- **stdlib reorg (tracks mihi 1.1.1's `cyrius.cyml`):**
+  - `agnosys` left the stdlib list and is now a proper git
+    dependency — `[deps.agnosys] tag = "1.4.0"`,
+    `modules = ["dist/agnosys-core.cyr"]` (the AGNOS-portable `core`
+    bundle; pin matches mihi 1.1.1's transitive). dist/mihi.cyr
+    needs the agnosys symbols present at parse time.
+  - `json` → `bayan` in the stdlib list. The standalone `json`
+    module was carved into the bundled `bayan` distribution and
+    folded back byte-identical via sandhi; mihi's `registry_to_json`
+    symbols resolve through bayan's back-compat aliases. `cyrius lib
+    sync` re-vendored the 6.2.22 stdlib snapshot into `lib/`.
+
+**No source changes.** No `src/*.cyr` edits; runtime output is
+byte-for-byte identical to v1.1.0 on archaemenid (Distro / Host /
+Kernel / Uptime / CPU / GPU / Memory spine unchanged). Build, lint,
+and tests pass; `cyrius.lock` regenerated (110 deps locked).
+
+## [1.1.0] — 2026-06-06 (cycle-open: AGNOS as a build target)
+
+### Added
+
+- **AGNOS platform support — cycle opened** (VERSION → 1.1.0). An AGNOS-target build so `iam` renders the system-info splash natively on AGNOS, displaying the fields mihi now reads from the `uname`#34 / `sysinfo`#35 kernel syscalls; the GPU/distro lines suppress where AGNOS has no source yet. Inline; no platform-abstraction layer yet.
+
 ## [1.0.0] — 2026-05-20
 
 **Output-shape freeze. M6 closed.** iam reaches the v1.0 contract

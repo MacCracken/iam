@@ -5,8 +5,29 @@
 
 ## Version
 
-**1.0.0** — shipped 2026-05-20. **M6 closed. Output-shape contract
-frozen.** Lockstep release with mihi 1.0.0. The cut is the
+**1.1.1** — shipped 2026-06-18. **Toolchain + dep refresh.**
+`[package].cyrius` 6.0.1 → **6.2.22** (matches mihi 1.1.1's pin),
+`[deps.mihi]` 1.0.0 → **1.1.1**. The 6.2.x stdlib reorg lands:
+`agnosys` leaves the stdlib and becomes a git dep
+(`[deps.agnosys] 1.4.0`, `dist/agnosys-core.cyr`) because mihi
+1.1.1 reads `uname`/`sysinfo` through `agnosys_uname`; `json` →
+`bayan` in the stdlib list (json folded into the bayan bundle via
+sandhi, back-compat aliases resolve mihi's `registry_to_json`).
+`[deps.ai-hwaccel]` stays **2.2.6** — mihi 1.1.1 pins the same
+transitive (the 2.3.x line is not referenced). `cyrius lib sync`
+re-vendored the 6.2.22 snapshot into `lib/`; `cyrius.lock`
+regenerated (110 deps). **Zero `src/*.cyr` changes** — runtime
+output byte-for-byte identical to v1.1.0 on archaemenid; build,
+lint, tests pass.
+
+**Previous**: 1.1.0 — 2026-06-06. Cycle-open for AGNOS as a build
+target (VERSION → 1.1.0): an AGNOS-target build so `iam` renders
+natively on AGNOS off the `uname`#34 / `sysinfo`#35 kernel
+syscalls; GPU/distro lines suppress where AGNOS has no source.
+Inline, no platform-abstraction layer.
+
+**Previous**: 1.0.0 — shipped 2026-05-20. **M6 closed. Output-shape
+contract frozen.** Lockstep release with mihi 1.0.0. The cut is the
 documented single-line `[deps.mihi] tag` bump from 0.7.0 → 1.0.0
 plus milestone-closure docs/audit work; **zero `src/*.cyr` changes
 since v0.9.0 RC**. mihi 1.0.0's bundle is module-content
@@ -63,7 +84,7 @@ driver flushes the whole report with a single syscall.
 
 ## Toolchain
 
-- **Cyrius pin**: `6.0.1` (in `cyrius.cyml [package].cyrius`)
+- **Cyrius pin**: `6.2.22` (in `cyrius.cyml [package].cyrius`)
 
 ## Shape
 
@@ -153,15 +174,21 @@ suite covers the ADR contract executable-form for synthetic inputs.
 Direct (declared in `cyrius.cyml`):
 
 - stdlib (union of iam + mihi + ai-hwaccel bundle needs): string,
-  fmt, alloc, io, vec, str, slice, syscalls, assert, agnosys, fs,
-  tagged, process, fnptr, thread, freelist, hashmap, ct, json, bench.
-- **mihi 1.0.0** — the probe library; every displayed line is a
-  `mihi_*` call. Pinned at the freeze; the surface iam links is
-  contract-bound per mihi's own v1.0 API freeze.
+  fmt, alloc, io, vec, str, slice, syscalls, assert, fs, tagged,
+  process, fnptr, thread, freelist, hashmap, ct, bayan, bench.
+  (6.2.x reorg: `agnosys` moved to a git dep below; `json` → `bayan`.)
+- **mihi 1.1.1** — the probe library; every displayed line is a
+  `mihi_*` call. Contract-bound per mihi's v1.0 API freeze; 1.1.1
+  routes the identity probes through `agnosys_uname`.
+- **agnosys 1.4.0** — transitive as of mihi 1.1.1. mihi's
+  `dist/mihi.cyr` reads `uname`/`sysinfo` through `agnosys_uname`,
+  so the AGNOS-portable `core` bundle (`dist/agnosys-core.cyr`) must
+  be present at parse time. Matches mihi 1.1.1's own transitive pin.
 - **ai-hwaccel 2.2.6** — pulled in transitively (mihi's
   `dist/mihi.cyr` references ai-hwaccel symbols in its GPU block).
-  Matches mihi 1.0.0's own transitive pin; the no-exec API is the
-  only ai-hwaccel surface mihi reaches.
+  Matches mihi 1.1.1's own transitive pin (unchanged from 1.0.0; the
+  2.3.x line is not referenced); the no-exec API is the only
+  ai-hwaccel surface mihi reaches.
 
 ## Consumers
 
