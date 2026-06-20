@@ -4,6 +4,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.2] — 2026-06-19 (AGNOS verified)
+
+### Changed
+
+- **`[deps.mihi] tag` 1.1.1 → 1.1.2** — mihi gained the AGNOS build-target probe branches (sysinfo#35 RAM/uptime, single-core CPU count, `AGNOS` distro). iam itself needs **no source change**: it is pure presentation — every line routes through a `mihi_*` probe, so mihi's agnos branches carry it across.
+
+### Verified
+
+- **Renders the full system card on real agnos (kernel 1.45.10) under QEMU** — `Distro: AGNOS` / `Kernel: AGNOS` / `Uptime` / `CPU` / `Memory: 128 MiB`, driven through agnsh. Harness: `agnos/scripts/iam-agnos-verify.py`.
+
 ## [1.1.1] — 2026-06-18 (toolchain + dep refresh)
 
 ### Changed

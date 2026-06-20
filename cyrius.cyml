@@ -37,7 +37,7 @@ stdlib = [
 # owns the probes (CLAUDE.md: "Probe via mihi, never inline").
 [deps.mihi]
 git = "https://github.com/MacCracken/mihi.git"
-tag = "1.1.1"
+tag = "1.1.2"
 modules = ["dist/mihi.cyr"]
 
 # agnosys: kernel-interface lib wrapping uname / sysinfo with Result-based

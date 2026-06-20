@@ -218,6 +218,15 @@ conversation reopens.
   are the natural v2.0 conversation, additive on top of a frozen
   base.
 
+## Pending upstream — agnosys → agnodrm decomposition
+
+- [ ] **Drop the transitive agnosys dep.** iam references no agnosys symbol
+  itself; it pulls `agnosys-core` only so mihi's vendored bundle resolves
+  `agnosys_uname`. iam's dep drops automatically once **mihi** re-sources uname
+  (gated on the cyrius uname/sysinfo request — see the mihi roadmap). Redirect-safe
+  meanwhile (git+tag `1.4.0`, not broken). No iam code change when it lands — just
+  remove `[deps.agnosys]`.
+
 ## Cross-references
 
 - [`state.md`](state.md) — live status (mihi version pin, output lines)
