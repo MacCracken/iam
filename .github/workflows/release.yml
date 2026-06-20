@@ -226,7 +226,7 @@ jobs:
           prerelease: ${{ startsWith(env.VERSION, '0.') }}
           files: |
             out/*.tar.gz
-            out/iam-*
+            out/iam-*-x86_64-linux
             out/SHA256SUMS
           generate_release_notes: true
           fail_on_unmatched_files: true
