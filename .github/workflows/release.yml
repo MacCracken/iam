@@ -89,11 +89,11 @@ jobs:
           echo "Installing Cyrius $CYRIUS_VERSION"
           curl -sLO "https://github.com/MacCracken/cyrius/releases/download/$CYRIUS_VERSION/cyrius-$CYRIUS_VERSION-x86_64-linux.tar.gz"
           tar xzf "cyrius-$CYRIUS_VERSION-x86_64-linux.tar.gz"
-          CYRIUS_DIR="cyrius-$CYRIUS_VERSION-x86_64-linux"
-          mkdir -p "$HOME/.cyrius/bin" "$HOME/.cyrius/lib"
-          cp "$CYRIUS_DIR/bin/"* "$HOME/.cyrius/bin/" 2>/dev/null || true
-          cp -r "$CYRIUS_DIR/lib/"* "$HOME/.cyrius/lib/" 2>/dev/null || true
-          chmod +x "$HOME/.cyrius/bin/"* 2>/dev/null || true
+          # Install via the upstream install.sh — it creates ~/.cyrius/versions/<v>/
+          # (bin + the stdlib snapshot) which `cyrius lib sync` reads from. The old
+          # hand-rolled curl+cp only populated ~/.cyrius/{bin,lib} with no versioned
+          # snapshot, so lib sync failed: "snapshot lib not found at ~/.cyrius/versions/<v>/lib".
+          CYRIUS_VERSION="$CYRIUS_VERSION" sh "cyrius-$CYRIUS_VERSION-x86_64-linux/install.sh"
           echo "$HOME/.cyrius/bin" >> $GITHUB_PATH
 
       - name: Resolve dependencies
