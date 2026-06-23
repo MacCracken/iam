@@ -4,6 +4,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.3] — 2026-06-22
+
+### Changed
+
+- **Dropped the `agnosys` git dep; rewired onto the native `sys` stdlib module.** cyrius
+  retired the stale stdlib `agnosys` snapshot at **6.2.37**; iam carried `[deps.agnosys]`
+  (1.4.0) only because mihi's bundle read uname/sysinfo through `agnosys_uname`. With **mihi
+  `1.1.2` → `1.1.3`** rewired to `sys_uname` / `sys_sysinfo` (`lib/sys.cyr`), iam drops the
+  agnosys git dependency, adds `"sys"` to the stdlib, bumps cyrius `6.2.22` → `6.2.37`, and
+  adds a `cyrius lib sync` CI step (the `sys` module is opt-in-vendored). **Host + `--agnos`
+  builds verified clean** — iam still renders its system card on agnos via mihi's probes. No
+  display-surface change.
+
 ## [1.1.2] — 2026-06-19 (AGNOS verified)
 
 ### Changed

@@ -97,7 +97,9 @@ jobs:
           echo "$HOME/.cyrius/bin" >> $GITHUB_PATH
 
       - name: Resolve dependencies
-        run: cyrius deps
+        run: |
+          cyrius deps
+          cyrius lib sync   # vendor stdlib modules (incl. `sys`) for mihi 1.1.3's sys_uname/sys_sysinfo
 
       - name: Build release binary (DCE)
         # Release builds use CYRIUS_DCE=1 — iam pulls in mihi +

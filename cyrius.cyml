@@ -4,7 +4,7 @@ version = "${file:VERSION}"
 description = "iam — fastfetch-equivalent system info display. Pure inverse of whoami: whoami says who the user is, iam says what the system is. Thin presentation over the mihi probe library."
 license = "GPL-3.0-only"
 language = "cyrius"
-cyrius = "6.2.22"
+cyrius = "6.2.37"
 
 [build]
 entry = "src/main.cyr"
@@ -18,17 +18,18 @@ output = "iam"
 # ai-hwaccel symbols — the parser needs the full chain present;
 # DCE drops unused code from the linked binary.
 #
-# 6.2.x stdlib reorg (tracks mihi 1.1.1's cyrius.cyml):
-#   - `agnosys` left the stdlib and is now a proper git dependency
-#     ([deps.agnosys] below) — mihi 1.1.1's bundle reads uname/sysinfo
-#     through agnosys_uname, so the agnosys-core bundle must be present.
+# stdlib (tracks mihi 1.1.3's cyrius.cyml):
+#   - `sys` provides the native uname/sysinfo plumbing (lib/sys.cyr) that
+#     mihi 1.1.3's bundle reads through `sys_uname` / `sys_sysinfo`. The old
+#     [deps.agnosys] git dep was dropped when cyrius retired the stale stdlib
+#     agnosys snapshot at 6.2.37. (`sys` is opt-in-vendored — needs `cyrius lib sync`.)
 #   - `json` was carved out of the stdlib into the bundled `bayan`
 #     distribution and folded back byte-identical via sandhi. mihi's
 #     `registry_to_json` symbols resolve through bayan's back-compat
 #     aliases, so `json` → `bayan` here.
 stdlib = [
     "string", "fmt", "alloc", "io", "vec", "str", "slice",
-    "syscalls", "assert", "fs", "tagged", "process",
+    "syscalls", "sys", "assert", "fs", "tagged", "process",
     "fnptr", "thread", "freelist", "hashmap", "ct", "bayan", "bench",
 ]
 
@@ -37,21 +38,8 @@ stdlib = [
 # owns the probes (CLAUDE.md: "Probe via mihi, never inline").
 [deps.mihi]
 git = "https://github.com/MacCracken/mihi.git"
-tag = "1.1.2"
+tag = "1.1.3"
 modules = ["dist/mihi.cyr"]
-
-# agnosys: kernel-interface lib wrapping uname / sysinfo with Result-based
-# error handling. New transitive as of mihi 1.1.1 — mihi's identity probes
-# (kernel_name / kernel_version / cpu_arch / hostname) share one syscall
-# through agnosys_uname, so dist/mihi.cyr references agnosys symbols and the
-# core bundle must be present at parse time. Pin matches mihi 1.1.1's own
-# [deps.agnosys] transitive (1.4.0 = first release with the AGNOS build
-# target: uname#34 / sysinfo#35). Only the AGNOS-portable `core` bundle is
-# pulled; the Linux-only security/storage/trust profiles are not needed.
-[deps.agnosys]
-git = "https://github.com/MacCracken/agnosys.git"
-tag = "1.4.0"
-modules = ["dist/agnosys-core.cyr"]
 
 # ai-hwaccel: pulled in because mihi/gpu.cyr inside dist/mihi.cyr
 # references registry_detect_no_exec / profile_* / FAMILY_CPU. Pin
