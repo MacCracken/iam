@@ -46,14 +46,17 @@ fn main() {
     var uok = 1;
     if (is_err_result(ures) == 1) { uok = 0; }
 
-    # CPU model — 8 KiB scratch. /proc/cpuinfo first-block fits.
-    var cpubuf[8192];
-    var cpu = mihi_cpu_model(&cpubuf, 8192);
+    # CPU model — 8 KiB scratch. HEAP, not stack: agnos gives a program only ~12 KB
+    # of usable user stack (elf.cyr exec layout), so an 8 KiB stack buffer here + the
+    # other locals overflowed it → #PF (user write to the unmapped page below rsp).
+    # /proc/cpuinfo first-block (Linux) fits; agnos fills it from CPUID (mihi 1.2.0).
+    var cpubuf = alloc(8192);
+    var cpu = mihi_cpu_model(cpubuf, 8192);
 
     # Memory total. /proc/meminfo is ~1.5 KB; 4 KiB scratch is the
     # mihi-recommended cap. Bytes → "31 GiB" via iam_format_bytes.
-    var membuf[4096];
-    var mbytes = mihi_mem_total(&membuf, 4096);
+    var membuf = alloc(4096);   # heap, not stack (see cpubuf — the ~12 KB user-stack cap)
+    var mbytes = mihi_mem_total(membuf, 4096);
     var memout[24];
     var mlen = 0;
     if (mbytes > 0) { mlen = iam_format_bytes(mbytes, &memout, 24); }

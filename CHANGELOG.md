@@ -4,6 +4,35 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.5] — 2026-07-02
+
+**Fix: iam faulted on agnos (never rendered) — a user-stack overflow, plus the CPU line.**
+On agnos, `run /bin/iam` died with a CPL3 page fault (write to the unmapped page just
+below `rsp`) before printing anything. Root cause: `main` put ~17.6 KB of scratch buffers
+on the stack, but agnos gives a program only ~12 KB of usable user stack (`elf.cyr` exec
+layout), so the frame overflowed. (Found via `-d int`: `v=0e e=0006 cpl=3 CR2=rsp-8`.)
+
+### Changed
+
+- **Heap-allocate the two large `/proc` scratch buffers** (`cpubuf` 8 KiB + `membuf`
+  4 KiB) instead of stack `var[N]` (`src/main.cyr`) — they're only used on Linux; agnos
+  fills CPU from CPUID and memory from `sysinfo`#35. Drops the `main` frame from ~17.6 KB
+  to ~5.5 KB, well under the ~12 KB agnos user-stack budget.
+- **Bumped `[deps.mihi]` `1.2.0` → `1.2.1`** — picks up the fix that actually compiles the
+  CPUID brand-string asm into the agnos build (1.2.0 had it `#ifdef`'d out on `--agnos`).
+
+### Verified
+
+- **agnos (QEMU/KVM):** iam renders the full system card with the real CPU brand
+  (`AMD Ryzen 7 5800H with Radeon Graphics`) — `agnos/scripts/iam-agnos-verify.py` **PASS**,
+  no fault. Native + `--agnos` builds green; test 105/0.
+
+### Notes
+
+- Surfaced (not fixed here): **~12 KB of usable user stack is a real agnos kernel limit** —
+  iam is just the first program to hit it. A kernel fix (start `rsp` near the top of the
+  mapped 2 MB stack page) would give every program a real stack.
+
 ## [1.1.4] — 2026-07-02
 
 ### Changed
