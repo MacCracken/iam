@@ -4,6 +4,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.4] — 2026-07-02
+
+### Changed
+
+- **Bumped `[deps.mihi]` `1.1.3` → `1.2.0`** — picks up mihi's sovereign CPUID CPU-model
+  probe. On **AGNOS** the `CPU:` line now renders the real processor brand (via CPUID
+  leaves 0x80000002/3/4) instead of `(unknown)` — agnos has no `/proc/cpuinfo`, which the
+  old mihi path read. The `cpus` count now reflects the kernel's enumerated CPUs
+  (`sysinfo`#35) rather than a stale hardcoded `1`. No iam-side code or API change — the
+  fix rides entirely in the mihi bundle. Linux output unchanged. Rebuilt: native shows
+  the real brand (`AMD Ryzen 7 5800H …`); `iam --agnos` compiles against the tagged bundle.
+
 ## [1.1.3] — 2026-06-22
 
 ### Changed
