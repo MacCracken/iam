@@ -22,18 +22,53 @@ include "src/uptime.cyr"
 # distro PRETTY_NAMEs / CPU model strings without risking overflow.
 enum IamMain {
     IAM_OUT_CAP = 4096;
+
+    # Retry sentinel for the stdout flush. Defined here rather than
+    # taken from the stdlib: `EINTR` is declared in the Linux and macOS
+    # syscall modules but *not* in `syscalls_x86_64_agnos.cyr`, so
+    # referencing the stdlib name compiles on host and aarch64 and
+    # fails the `--agnos` build. iam is an agnos build target, so the
+    # constant lives locally. Value is the POSIX errno, returned by a
+    # raw `syscall(SYS_WRITE, ...)` as its negation.
+    IAM_EINTR = 4;
 }
 
-# Append the result of one renderer to `out` at `*pos_ptr`. On
-# overflow (renderer returned 0 - 1) we leave `*pos_ptr` unchanged
-# and return 0 - 1 — caller stops accumulating. The partial bytes
-# already in `out[0..pos]` are still a valid output prefix.
+# Flush `len` bytes of `buf` to stdout, looping until the kernel has
+# taken all of them.
 #
-# Returns 0 on success, 0 - 1 on overflow.
-fn iam_append(out, cap, pos_ptr, n): i64 {
-    if (n < 0) { return 0 - 1; }
-    store64(pos_ptr, load64(pos_ptr) + n);
-    return 0;
+# `print()` is a bare `sys_write` whose return value it discards, so a
+# short write silently truncates the report and an `-EINTR` loses it
+# outright. write(2) is under no obligation to consume the whole
+# buffer in one call — this is the exact symmetric counterpart of the
+# short-read defect mihi's own 1.2.3 audit fixed (A-1), and it lands
+# on the login path where a half-printed MOTD is a visible failure.
+#
+# `sys_write` is a bare `syscall(SYS_WRITE, ...)` returning the raw
+# kernel value, so an error arrives as `-errno`. `-IAM_EINTR` is retried
+# rather than treated as fatal: it means no bytes moved and the call
+# should simply be reissued. Any other negative return is a real error
+# (EPIPE, EIO) and stops the loop — there is nowhere useful to report
+# it to, and ADR 0001 §6 says the exit code stays 0 regardless.
+#
+# Returns bytes actually written.
+fn iam_flush(buf, len): i64 {
+    var off = 0;
+    var go = 1;
+    var n = 0;
+    while (go == 1) {
+        if (off >= len) {
+            go = 0;
+        } else {
+            n = file_write(STDOUT, buf + off, len - off);
+            if (n > 0) {
+                off = off + n;
+            } else {
+                # n == 0 would spin forever; treat it as end-of-progress.
+                if (n != 0 - IAM_EINTR) { go = 0; }
+            }
+        }
+    }
+    return off;
 }
 
 fn main() {
@@ -106,8 +141,8 @@ fn main() {
         n = iam_render(&out + pos, IAM_OUT_CAP - pos, "Host", mihi_hostname(&uts));
         if (n > 0) { pos = pos + n; }
         n = iam_render_kernel(&out + pos, IAM_OUT_CAP - pos,
-                              "Kernel", mihi_kernel_name(&uts),
-                              mihi_kernel_version(&uts));
+          "Kernel", mihi_kernel_name(&uts),
+          mihi_kernel_version(&uts));
         if (n > 0) { pos = pos + n; }
     } else {
         n = iam_render(&out + pos, IAM_OUT_CAP - pos, "Host", 0);
@@ -132,17 +167,19 @@ fn main() {
     # ADR 0003; `glen == 0` renders the bare name.
     if (ngpu > 0) {
         n = iam_render_gpu(&out + pos, IAM_OUT_CAP - pos, "GPU",
-                           mihi_gpu_name(0), &gmemout, glen);
+          mihi_gpu_name(0), &gmemout, glen);
         if (n > 0) { pos = pos + n; }
     }
 
     n = iam_render_buf(&out + pos, IAM_OUT_CAP - pos, "Memory", &memout, mlen);
     if (n > 0) { pos = pos + n; }
 
-    # Single flush — one write syscall for the whole report. The
-    # ADR's "TTY == pipe" guarantee is automatic: no per-stream
-    # mode-switching, no flush boundaries that could differ.
-    print(&out, pos);
+    # Single flush — normally one write syscall for the whole report.
+    # The ADR's "TTY == pipe" guarantee is automatic: no per-stream
+    # mode-switching, no flush boundaries that could differ. The loop
+    # inside iam_flush only ever iterates if the kernel takes a partial
+    # buffer or interrupts the call; the common path is still one write.
+    iam_flush(&out, pos);
     return 0;
 }
 

@@ -24,6 +24,22 @@
 
 enum IamLayout {
     IAM_LABEL_WIDTH = 8;
+
+    # Hard cap on a single value column, in bytes. Bounds mihi-returned
+    # data at display time per CLAUDE.md ("even mihi output gets
+    # bounds-checked at display time") — the probe scratch buffers the
+    # driver hands mihi are far larger than any line can be (8 KiB for
+    # the CPU model alone), so without a cap here one pathological
+    # value overflows the 4 KiB output buffer and the renderer drops a
+    # *required* line rather than truncating it. That breaks ADR 0002's
+    # six-required-lines guarantee; see F-003 in
+    # docs/audit/2026-08-23-v1.1.7-audit.md.
+    #
+    # 256 is ~5x the longest value seen in the wild (a /proc/cpuinfo
+    # model name runs ~50 bytes; a PRETTY_NAME ~40; POSIX caps a
+    # hostname at 255). Worst-case seven-line output with every value
+    # clamped is 1673 bytes — comfortably inside IAM_OUT_CAP.
+    IAM_VALUE_MAX = 256;
 }
 
 # Display string when a probe returns no value. Kept short and
@@ -45,7 +61,12 @@ fn iam_put(out, cap, pos, c): i64 {
 # new pos, or 0 - 1 on overflow. Used by every renderer to lay down
 # labels, values, padding, and the trailing newline.
 fn iam_copy(out, cap, pos, src, len): i64 {
-    if (pos + len > cap) { return 0 - 1; }
+    if (len < 0) { return 0 - 1; }
+    # `len > cap - pos`, not `pos + len > cap`: the latter is an
+    # additive form that wraps if `len` is ever hostile, and a wrapped
+    # sum passes the check. Subtractive form cannot wrap for the
+    # non-negative pos/cap this file maintains.
+    if (len > cap - pos) { return 0 - 1; }
     var i = 0;
     while (i < len) {
         store8(out + pos + i, load8(src + i));
@@ -72,11 +93,41 @@ fn iam_copy(out, cap, pos, src, len): i64 {
 #
 # Returns new pos, or 0 - 1 on overflow.
 fn iam_copy_value(out, cap, pos, src, len): i64 {
-    if (pos + len > cap) { return 0 - 1; }
+    if (len < 0) { return 0 - 1; }
+    # Clamp before the capacity check, so an oversized value truncates
+    # instead of failing the line. `iam_copy_value` is the single choke
+    # point every value column routes through, which is why the cap
+    # lives here and not in each of the four renderers.
+    var t = 0;
+    var scan = 0;
+    if (len > IAM_VALUE_MAX) {
+        len = IAM_VALUE_MAX;
+        # Do not cut a UTF-8 sequence in half. Back off while the byte
+        # *at* the cut is a continuation byte (0x80-0xBF), so the value
+        # ends on a character boundary. load8 is unsigned here, so the
+        # 0x80-0xBF test is a plain range check. Flag-driven loop per
+        # the cyrius `break`-with-`var` caveat in CLAUDE.md.
+        scan = 1;
+        while (scan == 1) {
+            if (len <= 0) {
+                scan = 0;
+            } else {
+                t = load8(src + len);
+                if (t >= 128 && t < 192) { len = len - 1; } else { scan = 0; }
+            }
+        }
+    }
+    if (len > cap - pos) { return 0 - 1; }
     var i = 0;
     while (i < len) {
         var b = load8(src + i);
-        if (b < 32) { b = 63; }
+        # C0 controls are 0x00-0x1F *plus* DEL (0x7F) — DEL is part of
+        # the C0 set by ECMA-48, and was missed by the original F-001
+        # sanitizer. C1 (0x80-0x9F) is deliberately NOT filtered: on a
+        # UTF-8 terminal those bytes are multibyte continuation bytes,
+        # never standalone controls, so filtering them would corrupt
+        # legitimate non-ASCII values instead of protecting anything.
+        if (b < 32 || b == 127) { b = 63; }
         store8(out + pos + i, b);
         i = i + 1;
     }

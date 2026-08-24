@@ -5,7 +5,29 @@
 
 ## Version
 
-**Current release**: **1.1.6** — shipped 2026-08-23. Two cuts in one.
+**Current release**: **1.1.7** — shipped 2026-08-23. **P(-1)
+hardening sweep** — five findings, one a live contract violation, all
+fixed and regression-tested. Full write-up in
+[`../audit/2026-08-23-v1.1.7-audit.md`](../audit/2026-08-23-v1.1.7-audit.md).
+**F-003 (HIGH)**: nothing bounded a probe value against the 4 KiB
+output buffer, so an over-long value made `iam_render` return its error
+sentinel, the driver's `if (n > 0)` left the cursor unmoved, and a
+*required* line vanished — five lines instead of six, silently, against
+an ADR 0002 guarantee. Fixed with `IAM_VALUE_MAX = 256` enforced in
+`iam_copy_value` (the one choke point all four renderers share), with
+UTF-8-safe truncation. **F-004 (MEDIUM)**: the report was flushed with
+a single unchecked `write(2)` — `print()` discards the return, twice
+down — so a short write truncated it and `-EINTR` lost it; `iam_flush`
+now loops, retries `-EINTR`, and is verified not to hang on EPIPE.
+**F-005/F-006/F-007 (LOW)**: DEL (0x7F) missed by the C0 sanitizer,
+dead `iam_append`, and copy primitives that accepted a negative length
+and silently rewound the write cursor. Tests **122 → 141**, every one
+confirmed red against the v1.1.6 source first. `src/main.cyr` and
+`tests/iam.tcyr` normalized to canonical cyrfmt layout, closing the
+last cleanliness gap. Runtime output byte-identical to v1.1.6;
+benchmark 1580 → 1573 µs (noise).
+
+**Previous**: 1.1.6 — shipped 2026-08-23. Two cuts in one.
 (1) The `GPU:` line gained an on-device-memory suffix
 (`AMD Radeon (PCI 0x1002:0x1638) [3 GiB]`) per
 [`docs/adr/0003-gpu-line-memory-suffix.md`](../adr/0003-gpu-line-memory-suffix.md);
@@ -159,8 +181,11 @@ No flags planned for v1.0 beyond standard `--help` / `--version`.
 
 - `src/main.cyr` — driver: opens the shared uts buffer, calls the
   mihi probes, accumulates rendered lines into a 4 KiB stack
-  buffer, flushes once. Optional GPU line is inlined here (single
-  probe, single line, suppress-on-zero).
+  buffer, flushes once via `iam_flush` (short-write- and
+  `-EINTR`-safe; v1.1.7 F-004). Optional GPU line is inlined here
+  (single probe, single line, suppress-on-zero). `IAM_EINTR` is
+  defined locally because the stdlib's `EINTR` does not exist on the
+  agnos target.
 - `src/display.cyr` — `iam_render` / `iam_render_buf` /
   `iam_render_kernel` / `iam_render_gpu` line renderers
   (write-into-buffer, return bytes-written), `iam_format_bytes`
@@ -168,6 +193,11 @@ No flags planned for v1.0 beyond standard `--help` / `--version`.
   `iam_put` / `iam_copy` internal append+bounds primitives.
   `iam_render_gpu` composes device name + optional bracketed size
   (ADR 0003) and degrades to the bare name when the size is absent.
+  `iam_copy_value` is the single choke point every value column
+  routes through: it sanitizes C0 + DEL and enforces
+  `IAM_VALUE_MAX` (256 bytes, UTF-8-boundary-safe) so an over-long
+  probe value truncates instead of costing a whole required line
+  (v1.1.7 F-003).
 - `src/uptime.cyr` — `iam_format_uptime` (seconds → "1d 2h 3m" with
   zero-elision + `<1m` floor).
 
@@ -216,7 +246,7 @@ unchanged. Freezes at v1.0):
 
 ## Tests
 
-- `tests/iam.tcyr` — 122 assertions:
+- `tests/iam.tcyr` — 141 assertions:
   - Formatter logic (51): `iam_uint_into`, `iam_format_bytes`
     (boundary + floor + preview cases), `iam_format_uptime`
     (zero-elision, fresh-boot floor, cap-too-small).
@@ -235,6 +265,13 @@ unchanged. Freezes at v1.0):
     degrade paths (`mlen = 0` and mihi's `0 - 1` sentinel),
     `name = 0` with and without a size, overflow signaling, ESC
     sanitization on the composed line.
+  - v1.1.7 P(-1) hardening (19): the six-line contract surviving a
+    pathological 5000-byte value, `IAM_VALUE_MAX` holding across all
+    four renderers, a value exactly at the cap (off-by-one), UTF-8
+    boundary back-off on truncation, DEL (0x7F) sanitization, UTF-8
+    bytes surviving the sanitizer, and copy-primitive bounds at a
+    non-zero cursor. Each was confirmed to **fail** against the v1.1.6
+    source before being accepted.
 - `tests/iam.bcyr` — benchmark stub (`noop` micro-bench).
 - `tests/iam.fcyr` — fuzz stub.
 
@@ -331,51 +368,77 @@ holds with ~6.3× headroom.
 
 ## Audit
 
-v1.0.0 mihi-major-bump audit at
-[`../audit/2026-05-20-v1.0.0-audit.md`](../audit/2026-05-20-v1.0.0-audit.md)
-supersedes the v0.9.0 doc
-([`../audit/2026-05-19-v0.9.0-audit.md`](../audit/2026-05-19-v0.9.0-audit.md))
-— which superseded the M5.5 doc
+**Current**: v1.1.7 P(-1) hardening audit at
+[`../audit/2026-08-23-v1.1.7-audit.md`](../audit/2026-08-23-v1.1.7-audit.md),
+superseding the v1.0.0 doc
+([`../audit/2026-05-20-v1.0.0-audit.md`](../audit/2026-05-20-v1.0.0-audit.md))
+— which superseded v0.9.0
+([`../audit/2026-05-19-v0.9.0-audit.md`](../audit/2026-05-19-v0.9.0-audit.md)),
+M5.5
 ([`../audit/2026-05-19-m5.5-audit.md`](../audit/2026-05-19-m5.5-audit.md))
-— which superseded the M5 doc
-([`../audit/2026-05-19-audit.md`](../audit/2026-05-19-audit.md))
-— for the v1.0.0 scope. All four prior/current docs stay in the
-directory as historical record per audit-trail convention.
-**Verdict**: pass, no new findings; mihi 0.7.0 → 1.0.0 is a clean
-repin.
+and M5
+([`../audit/2026-05-19-audit.md`](../audit/2026-05-19-audit.md)).
+All five stay in the directory as historical record per audit-trail
+convention.
 
-- **F-001** (**RESOLVED at v0.9.0**, status unchanged at v1.0.0):
-  TTY-escape sanitization mitigation in `iam_copy_value`
-  (`src/display.cyr`); 15 byte-exact tests lock the behavior.
+**Verdict: not a pass on arrival** — the first audit since v1.0.0 to
+re-walk `src/` line-by-line found five issues, one of them a live
+violation of the frozen output contract. All five are fixed and
+regression-tested in the same cut; post-fix the tree is clean on every
+gate.
+
+- **F-003** (**HIGH, fixed at v1.1.7**): an over-long probe value
+  overflowed the 4 KiB output buffer, and because the driver only
+  advances its cursor on a positive renderer return, the whole
+  *required* line was dropped — five lines instead of six, silently,
+  against ADR 0002's guarantee. Bounded at display time by
+  `IAM_VALUE_MAX = 256` in `iam_copy_value`, UTF-8-boundary-safe.
+  Reproduced with a 5000-byte CPU model before the fix.
+- **F-004** (MEDIUM, fixed at v1.1.7): the report was flushed with one
+  unchecked `write(2)` — short write truncates, `-EINTR` loses it.
+  `iam_flush` loops and retries; verified not to hang on EPIPE or a
+  closed stdout.
+- **F-005 / F-006 / F-007** (LOW, fixed at v1.1.7): DEL (0x7F) missed
+  by the C0 sanitizer; `iam_append` dead code; copy primitives that
+  accepted a negative length and silently rewound the write cursor.
+- **F-001** (RESOLVED at v0.9.0): TTY-escape sanitization in
+  `iam_copy_value`. **Extended at v1.1.7** to cover DEL. C1
+  (0x80–0x9F) is deliberately *not* filtered — on a UTF-8 terminal
+  those are continuation bytes, so filtering them would corrupt
+  legitimate non-ASCII values while protecting against nothing.
 - **F-002** (INFO, carries forward): `strlen` on mihi cstrings is
-  trust-dependent — mihi-side invariant, not iam's to fix. At
-  v1.0.0 the cstring contract is **formally version-pinned** by
-  mihi's own v1.0 API freeze (signature / return-shape / error-
-  semantics changes now require a major mihi bump). F-001's
-  sanitizer continues to provide incidental defense-in-depth
-  against embedded NUL bytes surviving past `strlen`.
-- **Source re-walk** (v1.0.0): zero `src/*.cyr` changes since the
-  v0.9.0 RC baseline. The v1.0.0 working-tree delta is one line in
-  `cyrius.cyml` (`[deps.mihi] tag` 0.7.0 → 1.0.0) plus the
-  deps-managed `lib/mihi.cyr` regen. mihi-call surface, buffer
-  caps, and syscall family all byte-identical to v0.9.0.
-- **External CVE pass** (v1.0.0): clean. mihi 1.0.0's bundle
-  carries forward the 0.6.0 parser-overflow hardenings (C-1, M-1,
-  C-2) — reduces attack surface against adversarial `/proc`
-  content. The two AMD GPU kernel CVEs (CVE-2025-40289 /
-  CVE-2025-40288) remain environmental; archaemenid 7.0.5
-  unaffected.
-- **Bench impact**: median 1510 µs at v1.0.0 — inherited from
-  v0.9.0 (binary byte-identical). F-001 sanitizer still invisible
-  at this scale.
+  trust-dependent — a mihi-side invariant, not iam's to fix, and
+  formally version-pinned by mihi's v1.0 API freeze. F-003's clamp
+  bounds how much of an over-long value is *copied* but does **not**
+  bound the `strlen` scan itself; closing F-002 needs an `n`-limited
+  probe variant from mihi.
+- **Why four prior audits missed F-003**: F-002's framing ("iam trusts
+  mihi's NUL invariant") anchored every subsequent review on
+  *malformed* input. F-003 needs nothing malformed — a correctly
+  NUL-terminated 5000-byte string is enough. The unasked question was
+  not "what if mihi returns something broken" but "what if mihi returns
+  something **large**".
+- **Syscall surface** (v1.1.7): iam's own `src/` issues exactly one
+  direct syscall, `syscall(SYS_EXIT, r)`. No exec/fork/clone, no
+  sockets, no `dlopen`, no `getenv`, no direct `/proc` `/sys` `/etc`
+  opens, no stack buffer ≥ 64 KiB — all enforced by the CI security
+  scan.
+- **External research** (v1.1.7): no CVEs found against fastfetch or
+  neofetch for the escape-injection class, but the class itself is
+  well-attested (WinRAR CVE-2024-33899 / CVE-2024-36052 are the
+  concrete precedent for exactly what F-001 mitigates). ECMA-48 was the
+  source for the C0-includes-DEL correction in F-005. The dep tree is
+  entirely first-party (cyrius / mihi / ai-hwaccel) with no third-party
+  code, no network, and no FFI.
+- **Bench impact**: 1580 µs (v1.1.6) → 1573 µs (v1.1.7), interleaved
+  A/B with the compiler held constant. Hardening is free at this scale.
 
-All other categories clean (bounds, exit-code discipline, no
-unsafe syscalls, no env / file / network I/O).
+All other categories clean (bounds, exit-code discipline, no unsafe
+syscalls, no env / file / network I/O).
 
-**v1.0.0 release-gate status**: **clear.** Output-shape contract
-(ADR 0002) is frozen from this release — any future change to the
-line spine, label format, `(unknown)` fallback, or exit-code
-discipline is a real `Breaking` requiring a major-version bump.
+**Contract status**: ADR 0002's output-shape freeze holds. F-003 was
+not a contract change — it is iam starting to honour a guarantee the
+ADR already made and the code could violate.
 
 ## Next
 

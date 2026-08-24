@@ -167,7 +167,7 @@ fn main() {
     test_group("display.cyr — iam_render_kernel");
     n = iam_render_kernel(&rb, 256, "Kernel", "Linux", "7.0.5-arch1-1");
     assert_buf_eq(&rb, n, "Kernel: Linux 7.0.5-arch1-1\n",
-                  "kernel: name + ' ' + version");
+      "kernel: name + ' ' + version");
     # name=0 → unknown
     n = iam_render_kernel(&rb, 256, "Kernel", 0, "7.0.5");
     assert_buf_eq(&rb, n, "Kernel: (unknown)\n", "kernel name=0 → unknown");
@@ -214,7 +214,7 @@ fn main() {
     store8(&ev + 8, 0);    # NUL
     n = iam_render(&rb, 256, "CPU", &ev);
     assert_buf_eq(&rb, n, "CPU:    ?[31mRed\n",
-                  "iam_render: ESC sanitized to '?'");
+      "iam_render: ESC sanitized to '?'");
 
     # iam_render: newline-injection attempt in value would otherwise
     # break the line-equals-one-fact contract. Sanitizer catches it.
@@ -225,7 +225,7 @@ fn main() {
     store8(&nv + 3, 0);    # NUL
     n = iam_render(&rb, 256, "Host", &nv);
     assert_buf_eq(&rb, n, "Host:   A?B\n",
-                  "iam_render: LF injection sanitized to '?'");
+      "iam_render: LF injection sanitized to '?'");
 
     # iam_render_buf: control byte mid-buffer.
     var bv[6];
@@ -237,7 +237,7 @@ fn main() {
     store8(&bv + 5, 66);   # 'B'
     n = iam_render_buf(&rb, 256, "Memory", &bv, 6);
     assert_buf_eq(&rb, n, "Memory: 1 ?GiB\n",
-                  "iam_render_buf: ESC mid-buffer sanitized");
+      "iam_render_buf: ESC mid-buffer sanitized");
 
     # iam_render_kernel: ESC in both name and version.
     var kn[8];
@@ -257,14 +257,14 @@ fn main() {
     store8(&kv + 5, 0);    # NUL
     n = iam_render_kernel(&rb, 256, "Kernel", &kn, &kv);
     assert_buf_eq(&rb, n, "Kernel: ?Linux 7.0?1\n",
-                  "iam_render_kernel: ESC + TAB sanitized in name + version");
+      "iam_render_kernel: ESC + TAB sanitized in name + version");
 
     # IAM_UNKNOWN_TEXT path is NOT sanitized — it's iam-controlled
     # plain ASCII, but proving the bytes are exact (no incidental
     # change from F-001) locks the v0.5.0 behavior in place.
     n = iam_render(&rb, 256, "Distro", 0);
     assert_buf_eq(&rb, n, "Distro: (unknown)\n",
-                  "F-001: unknown fallback bytes unchanged");
+      "F-001: unknown fallback bytes unchanged");
 
     # ----- iam_render_gpu — name + optional size suffix (ADR 0003) ---
     # The GPU line is the only one whose value column composes two
@@ -276,28 +276,28 @@ fn main() {
     var gmem = "3 GiB";
     n = iam_render_gpu(&rb, 256, "GPU", "AMD Radeon", gmem, 5);
     assert_buf_eq(&rb, n, "GPU:    AMD Radeon [3 GiB]\n",
-                  "gpu: name + bracketed size suffix");
+      "gpu: name + bracketed size suffix");
     # Real archaemenid shape — the device name already carries a
     # parenthesised PCI id, which is why the suffix uses brackets.
     n = iam_render_gpu(&rb, 256, "GPU", "AMD Radeon (PCI 0x1002:0x1638)",
-                       gmem, 5);
+      gmem, 5);
     assert_buf_eq(&rb, n, "GPU:    AMD Radeon (PCI 0x1002:0x1638) [3 GiB]\n",
-                  "gpu: parenthesised PCI id + bracketed size");
+      "gpu: parenthesised PCI id + bracketed size");
     # mlen=0 — backend reported no size. Bare name, no placeholder.
     n = iam_render_gpu(&rb, 256, "GPU", "AMD Radeon", gmem, 0);
     assert_buf_eq(&rb, n, "GPU:    AMD Radeon\n",
-                  "gpu: mlen=0 → bare name (pre-0003 bytes)");
+      "gpu: mlen=0 → bare name (pre-0003 bytes)");
     # mlen<0 — mihi's out-of-range sentinel. Same degrade.
     n = iam_render_gpu(&rb, 256, "GPU", "AMD Radeon", gmem, 0 - 1);
     assert_buf_eq(&rb, n, "GPU:    AMD Radeon\n",
-                  "gpu: mlen=-1 → bare name");
+      "gpu: mlen=-1 → bare name");
     # name=0 — probe failure. Unknown fallback, size discarded.
     n = iam_render_gpu(&rb, 256, "GPU", 0, gmem, 5);
     assert_buf_eq(&rb, n, "GPU:    (unknown)\n",
-                  "gpu: name=0 → (unknown) even with a size");
+      "gpu: name=0 → (unknown) even with a size");
     n = iam_render_gpu(&rb, 256, "GPU", 0, gmem, 0);
     assert_buf_eq(&rb, n, "GPU:    (unknown)\n",
-                  "gpu: name=0 + mlen=0 → (unknown)");
+      "gpu: name=0 + mlen=0 → (unknown)");
     # Overflow signaling matches the other renderers.
     n = iam_render_gpu(&sb, 10, "GPU", "TooLongForThisBuffer", gmem, 5);
     assert_eq(n, 0 - 1, "gpu: cap=10 overflow returns -1");
@@ -306,7 +306,7 @@ fn main() {
     # other value-column byte.
     n = iam_render_gpu(&rb, 256, "GPU", &ev, gmem, 5);
     assert_buf_eq(&rb, n, "GPU:    ?[31mRed [3 GiB]\n",
-                  "gpu: ESC in device name sanitized to '?'");
+      "gpu: ESC in device name sanitized to '?'");
 
     # ----- Full ADR-contract output (ADR 0002 §2) -------------------
     # Six-line canonical shape — every required label in order, no
@@ -377,7 +377,7 @@ fn main() {
     pos7b = pos7b + r7b;
     var seven_line_nomem = "Distro: Test OS\nHost:   testbox\nKernel: Linux 1.0.0\nUptime: 1d 2h 3m\nCPU:    Test CPU\nGPU:    Test GPU\nMemory: 16 GiB\n";
     assert_buf_eq(&out7b, pos7b, seven_line_nomem,
-                  "seven-line assembly, GPU size unavailable");
+      "seven-line assembly, GPU size unavailable");
 
     # ----- Degraded-probe assembled output --------------------------
     # All-probe-failure scenario: every required line renders as
@@ -400,6 +400,121 @@ fn main() {
     dpos = dpos + dr;
     var degraded = "Distro: (unknown)\nHost:   (unknown)\nKernel: (unknown)\nUptime: (unknown)\nCPU:    (unknown)\nMemory: (unknown)\n";
     assert_buf_eq(&dout, dpos, degraded, "all-probe-failure six-line shape");
+
+    # ----- v1.1.7 hardening: F-003 value-column bound ---------------
+    # The audit finding this suite exists to prevent recurring: an
+    # over-long value used to overflow the output buffer, and because
+    # the driver only advances `pos` on a positive return, the whole
+    # *required* line vanished. Six-required-lines (ADR 0002) is a
+    # contract, so the value truncates and the line always renders.
+    test_group("display.cyr — F-003 value-column bound");
+    var bigv = alloc(8192);
+    var bi = 0;
+    while (bi < 5000) { store8(bigv + bi, 65); bi = bi + 1; }
+    store8(bigv + 5000, 0);
+
+    var fbuf[1024];
+    var fr = iam_render(&fbuf, 1024, "CPU", bigv);
+    assert_eq(fr, 8 + IAM_VALUE_MAX + 1,
+      "over-long value truncates to IAM_VALUE_MAX, line still renders");
+    assert_eq(load8(&fbuf + 8 + IAM_VALUE_MAX), 10,
+      "truncated line still ends in a newline");
+    assert_eq(load8(&fbuf), 67, "truncated line still starts with its label");
+
+    # The exact defect: six required lines must survive a pathological
+    # value in a 4 KiB buffer. Before the fix this assembled to 5.
+    var abuf[4096];
+    var apos = 0;
+    var ar = iam_render(&abuf + apos, 4096 - apos, "Distro", "Arch Linux");
+    if (ar > 0) { apos = apos + ar; }
+    ar = iam_render(&abuf + apos, 4096 - apos, "Host", "archaemenid");
+    if (ar > 0) { apos = apos + ar; }
+    ar = iam_render_kernel(&abuf + apos, 4096 - apos, "Kernel", "Linux", "7.1.8");
+    if (ar > 0) { apos = apos + ar; }
+    ar = iam_render_buf(&abuf + apos, 4096 - apos, "Uptime", "1d 1h", 5);
+    if (ar > 0) { apos = apos + ar; }
+    ar = iam_render(&abuf + apos, 4096 - apos, "CPU", bigv);
+    if (ar > 0) { apos = apos + ar; }
+    ar = iam_render_buf(&abuf + apos, 4096 - apos, "Memory", "59 GiB", 6);
+    if (ar > 0) { apos = apos + ar; }
+    var alines = 0;
+    bi = 0;
+    while (bi < apos) {
+        if (load8(&abuf + bi) == 10) { alines = alines + 1; }
+        bi = bi + 1;
+    }
+    assert_eq(alines, 6, "pathological value keeps the six-line contract");
+
+    # Every renderer routes its value column through the same choke
+    # point, so the bound has to hold for all four.
+    var kr = iam_render_kernel(&fbuf, 1024, "Kernel", bigv, "1.0");
+    assert_eq(kr, 8 + IAM_VALUE_MAX + 1 + 3 + 1, "kernel name is bounded too");
+    var gr = iam_render_gpu(&fbuf, 1024, "GPU", bigv, "3 GiB", 5);
+    assert_eq(gr, 8 + IAM_VALUE_MAX + 1 + 1 + 5 + 1 + 1, "gpu name is bounded too");
+    var br = iam_render_buf(&fbuf, 1024, "Memory", bigv, 5000);
+    assert_eq(br, 8 + IAM_VALUE_MAX + 1, "buf-variant value is bounded too");
+
+    # A value exactly at the cap is not truncated (off-by-one guard).
+    var exactv = alloc(512);
+    bi = 0;
+    while (bi < IAM_VALUE_MAX) { store8(exactv + bi, 66); bi = bi + 1; }
+    store8(exactv + IAM_VALUE_MAX, 0);
+    var er = iam_render(&fbuf, 1024, "CPU", exactv);
+    assert_eq(er, 8 + IAM_VALUE_MAX + 1, "value exactly at the cap is untouched");
+
+    # ----- v1.1.7 hardening: UTF-8 boundary on truncation -----------
+    # Cutting at a fixed byte offset can land mid-sequence. A 3-byte
+    # sequence starting at 254 would be sliced after its first byte,
+    # emitting an invalid fragment; the cut backs off to 254 instead.
+    test_group("display.cyr — F-003 truncation lands on a UTF-8 boundary");
+    var uv = alloc(1024);
+    bi = 0;
+    while (bi < 254) { store8(uv + bi, 67); bi = bi + 1; }   # 254x 'C'
+    store8(uv + 254, 226);   # 0xE2  lead byte of a 3-byte sequence
+    store8(uv + 255, 128);   # 0x80  continuation
+    store8(uv + 256, 153);   # 0x99  continuation
+    bi = 257;
+    while (bi < 600) { store8(uv + bi, 67); bi = bi + 1; }
+    store8(uv + 600, 0);
+    var ur = iam_render(&fbuf, 1024, "CPU", uv);
+    assert_eq(ur, 8 + 254 + 1, "truncation backs off to the character boundary");
+    assert_eq(load8(&fbuf + 8 + 253), 67, "last kept byte is the complete char before the cut");
+    assert_eq(load8(&fbuf + 8 + 254), 10, "no partial sequence is emitted");
+
+    # ----- v1.1.7 hardening: F-005 DEL (0x7F) sanitization ----------
+    # C0 is 0x00-0x1F *plus* DEL by ECMA-48; the original F-001 filter
+    # covered only the low run. C1 (0x80-0x9F) stays unfiltered on
+    # purpose — those are UTF-8 continuation bytes on a UTF-8 terminal.
+    test_group("display.cyr — F-005 DEL sanitization");
+    var dv = alloc(64);
+    store8(dv, 65); store8(dv + 1, 127); store8(dv + 2, 66); store8(dv + 3, 0);
+    var dr7 = iam_render(&fbuf, 1024, "CPU", dv);
+    assert_buf_eq(&fbuf, dr7, "CPU:    A?B
+", "DEL (0x7F) is replaced with '?'");
+
+    var utf8v = alloc(64);
+    store8(utf8v, 195); store8(utf8v + 1, 169); store8(utf8v + 2, 0);   # "é" in UTF-8
+    var cr = iam_render(&fbuf, 1024, "CPU", utf8v);
+    assert_eq(load8(&fbuf + 8), 195, "UTF-8 lead byte survives sanitization");
+    assert_eq(load8(&fbuf + 9), 169, "UTF-8 continuation byte survives sanitization");
+
+    # ----- v1.1.7 hardening: F-007 primitive bounds -----------------
+    # The copy primitives are the last line of defence; a negative
+    # length must be refused rather than silently rewinding `pos`.
+    test_group("display.cyr — F-007 copy-primitive bounds");
+    # Non-zero `pos` is load-bearing in these two: at pos==0 the old
+    # additive check returned `0 + (-1)` == -1 and looked correct by
+    # accident. The actual defect only shows with the cursor advanced —
+    # the primitive returned `pos + len`, silently REWINDING the write
+    # cursor (10 -> 9) instead of refusing the copy.
+    assert_eq(iam_copy(&fbuf, 1024, 10, "abc", 0 - 1), 0 - 1,
+      "iam_copy refuses a negative length instead of rewinding pos");
+    assert_eq(iam_copy_value(&fbuf, 1024, 10, "abc", 0 - 1), 0 - 1,
+      "iam_copy_value refuses a negative length instead of rewinding pos");
+    assert_eq(iam_copy(&fbuf, 8, 0, "abcdefghij", 10), 0 - 1,
+      "iam_copy refuses a copy past cap");
+    assert_eq(iam_copy(&fbuf, 8, 0, "abcdefgh", 8), 8,
+      "iam_copy accepts a copy that exactly fills cap");
 
     return assert_summary();
 }

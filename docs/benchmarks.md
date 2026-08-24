@@ -151,6 +151,28 @@ historical figure is not used as the control — a measurement from a
 different kernel and a different compiler cannot isolate a library
 change.
 
+## v1.1.7 — P(-1) hardening A/B (2026-08-23)
+
+Same question as the 1.1.6 row, different change: the hardening sweep
+added a per-value-byte comparison (the DEL check, F-005) and a clamp
+test on every value column (F-003), both on the login-hot path. Does
+it cost anything?
+
+Interleaved A/B on `archaemenid`, compiler held constant at 6.5.35,
+three trials each of the standard N=500 batch:
+
+| Tree | t1 | t2 | t3 | Median |
+| ------ | ---:| ---:| ---:| ------:|
+| v1.1.6 | 1572 us | 1580 us | 1634 us | **1580 us** |
+| v1.1.7 | 1573 us | 1575 us | 1552 us | **1573 us** |
+
+**Verdict**: no regression. The two medians differ by less than the
+spread within either column, so the honest reading is
+"indistinguishable". Both added checks are a single integer comparison
+per value byte, against realistic value lengths of ~10-50 bytes across
+seven lines — a few hundred comparisons total, well under this
+methodology's resolution. M5's < 10 ms gate holds with ~6.4x headroom.
+
 ## Reproducing
 
 From the repo root with a built binary:

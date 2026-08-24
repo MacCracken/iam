@@ -4,6 +4,122 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.7] — 2026-08-23
+
+**P(-1) hardening sweep. Five findings, one of them a live contract violation.**
+Full write-up in [`docs/audit/2026-08-23-v1.1.7-audit.md`](docs/audit/2026-08-23-v1.1.7-audit.md).
+
+The one that matters: **iam could silently print five lines instead of six.** ADR 0002
+guarantees the six required labels always appear and CI gates on it, but nothing bounded a
+probe value against the 4 KiB buffer it had to fit into. On overflow `iam_render` returned
+its error sentinel, the driver's `if (n > 0) { pos = pos + n; }` left the cursor where it
+was, and the whole `CPU:` line vanished — no error, no stderr, just a missing fact.
+Reproduced with a 5000-byte CPU model, fixed, and locked with a test that fails against the
+v1.1.6 source.
+
+Runtime output on archaemenid is **byte-identical to v1.1.6**. Every fix here changes
+behaviour only for input that was already pathological.
+
+### Added
+
+- **`IAM_VALUE_MAX` (256 bytes)** — a hard cap on any single value column, enforced inside
+  `iam_copy_value`, the one choke point all four renderers route their value through. An
+  over-long value now truncates and **the line still renders**. This is what CLAUDE.md's
+  "even mihi output gets bounds-checked at display time" was asking for and iam was not
+  doing: the driver hands mihi an 8 KiB scratch for the CPU model alone, against a 4 KiB
+  buffer for all seven lines. Worst-case seven-line output with every value clamped is
+  1673 bytes.
+- **UTF-8-safe truncation** — the clamp backs off while the byte at the cut is a
+  continuation byte (0x80–0xBF), so a truncated value ends on a character boundary instead
+  of emitting half a sequence. (`load8` was verified unsigned before relying on that test.)
+- **`iam_flush`** — a short-write- and `-EINTR`-safe stdout flush, replacing the unchecked
+  single `print()`.
+- **`IAM_EINTR`**, defined locally rather than taken from the stdlib — see *Fixed*.
+- **19 assertions** in `tests/iam.tcyr` (122 → **141**): the six-line contract under a
+  pathological value, the bound holding across all four renderers, a value exactly at the
+  cap, UTF-8 boundary back-off, DEL sanitization, UTF-8 bytes surviving sanitization, and
+  the copy-primitive bounds.
+
+### Fixed
+
+- **F-003 (HIGH) — an over-long probe value dropped a required line.** Detail above. The
+  reason four previous audits missed it is worth recording, and it is not that the threat
+  was unimagined. `SECURITY.md` has named it since the first audit: *"if mihi returns
+  adversarially-**large** or malformed buffers […] iam's display formatter must still bound
+  writes."* Writes **were** bounded the whole time — `iam_copy`'s capacity check never let a
+  byte past the end, and no overflow ever occurred. What nothing verified was what iam
+  *prints* once the bound is hit. Every audit confirmed iam does not overflow; none asked
+  what it emits when it declines to. F-002's standing framing ("iam trusts mihi's NUL
+  invariant") compounded it by anchoring each review on *malformed* input, when F-003 needs
+  nothing malformed — a correctly NUL-terminated 5000-byte string is enough.
+  Reachability is a crafted `/etc/os-release` `PRETTY_NAME`, a doctored `/proc` mount, or
+  root — real configurations, and the failure is silent. Growing `IAM_OUT_CAP` was
+  considered and rejected: it does not fix the class, and a 16 KiB stack buffer would blow
+  the ~12 KiB agnos user-stack budget v1.1.5 was cut to respect.
+- **F-004 (MEDIUM) — the report was flushed with a single unchecked `write(2)`.**
+  `print()` discards `file_write`'s return, which discards `sys_write`'s, which is a bare
+  `syscall(SYS_WRITE, ...)`. A short write silently truncated the report; an `-EINTR` lost
+  it. Exact symmetric counterpart of the short-read defect mihi's 1.2.3 audit filed as A-1,
+  on the login path where a half-printed MOTD is visible. `iam_flush` now loops until the
+  kernel has taken every byte, retries `-EINTR`, and stops on any other negative return
+  (EPIPE, EIO — nowhere useful to report it, and ADR 0001 §6 keeps exit at 0).
+  **Verified not to hang**, which is the risk a retry loop introduces: early-closed pipe
+  (`iam | head -c 10`) and fully closed stdout both exit 0 immediately.
+- **`EINTR` is not portable to the agnos target.** The flush first used the stdlib
+  constant, which compiles on host and `--aarch64` and **fails `--agnos`** — `EINTR` is
+  declared in the Linux and macOS syscall modules but not in `syscalls_x86_64_agnos.cyr`.
+  iam is an agnos build target, so it now defines `IAM_EINTR` locally. Caught by the
+  cross-target build; a host-only gate would have shipped it.
+- **F-005 (LOW) — the value sanitizer missed DEL (0x7F).** By ECMA-48 the C0 set is
+  0x00–0x1F **plus** DEL, so DEL passed a filter whose stated intent is "no control bytes in
+  the value column". Now `b < 32 || b == 127`. **C1 (0x80–0x9F) stays deliberately
+  unfiltered** — general terminal-sanitization guidance says to strip it, and that guidance
+  is wrong here: on a UTF-8 terminal those bytes are only ever multibyte continuation bytes,
+  so filtering them would corrupt legitimate non-ASCII values while protecting against
+  nothing. Recorded so a future audit does not "fix" it.
+- **F-006 (LOW) — `iam_append` was dead code**, defined and never called, in a 150-line file
+  whose stated value is being small and auditable. Its slot is now `iam_flush`.
+- **F-007 (LOW) — the copy primitives accepted a negative length and silently rewound the
+  write cursor.** `if (pos + len > cap)` passes for `len = -1`; the copy loop does not run;
+  the function returns `pos + len`, moving the cursor *backwards* so the next write clobbers
+  a byte of the previous line. Bound is now the non-wrapping `len > cap - pos` plus an
+  explicit `len < 0` refusal. The first version of this regression test **passed against the
+  unfixed source** — at `pos == 0` the buggy `0 + (-1)` is `-1`, the right answer by
+  coincidence. With the cursor advanced, v1.1.6 returns **9**. The test uses a non-zero
+  `pos` for exactly that reason.
+
+### Changed
+
+- **Formatting normalized** in `src/main.cyr` and `tests/iam.tcyr` — continuation lines used
+  aligned-to-open-paren indentation where canonical style is 2 spaces per open paren, a
+  divergence 6.5.35's formatter flags and 6.2.37's accepted. Whitespace-only: `diff -w` is
+  empty for both, `cyrius fmt` is idempotent on the result, and 141/0 passes before and
+  after. Deferred twice in the 1.1.6 cycle on readability grounds; mihi's own 1.2.2
+  normalization settles the precedent and this closes the last cleanliness gap.
+
+### Verified
+
+- `cyrius build` **OK** on x86_64, `--agnos`, and `--aarch64`; `cyrius lint` **0 warnings**;
+  `cyrius fmt --check` **clean** across all `src/` and `tests/`; `cyrius test` **141/0**.
+- **Every finding's regression test was confirmed red against the v1.1.6 source** before
+  being accepted as green — built from `git archive HEAD` into a scratch tree. A test that
+  would also pass when the code is broken is worthless.
+- Runtime byte-identical to v1.1.6 on archaemenid; stderr 0 bytes; TTY, pipe, and file all
+  produce the same 194 bytes.
+- **No runtime regression** — interleaved A/B, compiler held constant, three N=500 trials
+  each: **1580 µs** median at v1.1.6 vs **1573 µs** at v1.1.7. The added per-byte comparison
+  and clamp check are invisible at this scale; < 10 ms gate holds with ~6.4x headroom.
+
+### Notes
+
+- **`Minor`, not `Breaking`.** Line order, label set, label width, the `(unknown)` policy,
+  and exit-0 are untouched. F-003 does not change the contract — it makes iam start
+  honouring a guarantee ADR 0002 already made and the code could violate.
+- **F-002 (`strlen` trust-dependence) still carries as INFO.** F-003's clamp bounds how much
+  of an over-long value is *copied*; it does not bound the `strlen` scan, which still runs
+  to the first NUL. Closing F-002 needs an `n`-limited probe variant from mihi — a mihi API
+  question, not an iam one.
+
 ## [1.1.6] — 2026-08-23
 
 **Two cuts in one: the GPU line learns how much memory the accelerator has, and the
