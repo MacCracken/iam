@@ -26,3 +26,10 @@ Decisions about iam — what we chose, the context, and the consequences we acce
   identity → runtime → hardware spine (Distro / Host / Kernel /
   Uptime / CPU / GPU? / Memory). Supersedes ADR 0001 §2-§3 only;
   §1, §4, §5, §6 carry over unchanged. (Accepted, 2026-05-19.)
+- [0003 — GPU line carries on-device memory](0003-gpu-line-memory-suffix.md)
+  — the GPU value column gains a bracketed size suffix
+  (`AMD Radeon (PCI 0x1002:0x1638) [3 GiB]`) when the probe knows
+  it, silently degrading to the bare device name when it doesn't.
+  Extends ADR 0002 §3's value column; line order, label set, and
+  the six-or-seven-line count guarantee are untouched.
+  (Accepted, 2026-08-01.)

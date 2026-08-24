@@ -266,6 +266,48 @@ fn main() {
     assert_buf_eq(&rb, n, "Distro: (unknown)\n",
                   "F-001: unknown fallback bytes unchanged");
 
+    # ----- iam_render_gpu — name + optional size suffix (ADR 0003) ---
+    # The GPU line is the only one whose value column composes two
+    # facts. Both degrade paths are silent by contract: no size →
+    # bare name (byte-identical to the pre-0003 line), no name →
+    # `(unknown)` regardless of the size. Sits after the F-001 group
+    # so the ESC-laden `ev` fixture is already built.
+    test_group("display.cyr — iam_render_gpu (ADR 0003)");
+    var gmem = "3 GiB";
+    n = iam_render_gpu(&rb, 256, "GPU", "AMD Radeon", gmem, 5);
+    assert_buf_eq(&rb, n, "GPU:    AMD Radeon [3 GiB]\n",
+                  "gpu: name + bracketed size suffix");
+    # Real archaemenid shape — the device name already carries a
+    # parenthesised PCI id, which is why the suffix uses brackets.
+    n = iam_render_gpu(&rb, 256, "GPU", "AMD Radeon (PCI 0x1002:0x1638)",
+                       gmem, 5);
+    assert_buf_eq(&rb, n, "GPU:    AMD Radeon (PCI 0x1002:0x1638) [3 GiB]\n",
+                  "gpu: parenthesised PCI id + bracketed size");
+    # mlen=0 — backend reported no size. Bare name, no placeholder.
+    n = iam_render_gpu(&rb, 256, "GPU", "AMD Radeon", gmem, 0);
+    assert_buf_eq(&rb, n, "GPU:    AMD Radeon\n",
+                  "gpu: mlen=0 → bare name (pre-0003 bytes)");
+    # mlen<0 — mihi's out-of-range sentinel. Same degrade.
+    n = iam_render_gpu(&rb, 256, "GPU", "AMD Radeon", gmem, 0 - 1);
+    assert_buf_eq(&rb, n, "GPU:    AMD Radeon\n",
+                  "gpu: mlen=-1 → bare name");
+    # name=0 — probe failure. Unknown fallback, size discarded.
+    n = iam_render_gpu(&rb, 256, "GPU", 0, gmem, 5);
+    assert_buf_eq(&rb, n, "GPU:    (unknown)\n",
+                  "gpu: name=0 → (unknown) even with a size");
+    n = iam_render_gpu(&rb, 256, "GPU", 0, gmem, 0);
+    assert_buf_eq(&rb, n, "GPU:    (unknown)\n",
+                  "gpu: name=0 + mlen=0 → (unknown)");
+    # Overflow signaling matches the other renderers.
+    n = iam_render_gpu(&sb, 10, "GPU", "TooLongForThisBuffer", gmem, 5);
+    assert_eq(n, 0 - 1, "gpu: cap=10 overflow returns -1");
+    # F-001 sanitizer holds on the composed line — the device name is
+    # mihi-sourced, so it routes through iam_copy_value like every
+    # other value-column byte.
+    n = iam_render_gpu(&rb, 256, "GPU", &ev, gmem, 5);
+    assert_buf_eq(&rb, n, "GPU:    ?[31mRed [3 GiB]\n",
+                  "gpu: ESC in device name sanitized to '?'");
+
     # ----- Full ADR-contract output (ADR 0002 §2) -------------------
     # Six-line canonical shape — every required label in order, no
     # GPU line. Mirrors what `./build/iam` emits on a GPU-less box.
@@ -306,12 +348,36 @@ fn main() {
     pos7 = pos7 + r7;
     r7 = iam_render(&out7 + pos7, 1024 - pos7, "CPU", "Test CPU");
     pos7 = pos7 + r7;
-    r7 = iam_render(&out7 + pos7, 1024 - pos7, "GPU", "Test GPU");
+    r7 = iam_render_gpu(&out7 + pos7, 1024 - pos7, "GPU", "Test GPU", "8 GiB", 5);
     pos7 = pos7 + r7;
     r7 = iam_render_buf(&out7 + pos7, 1024 - pos7, "Memory", "16 GiB", 6);
     pos7 = pos7 + r7;
-    var seven_line = "Distro: Test OS\nHost:   testbox\nKernel: Linux 1.0.0\nUptime: 1d 2h 3m\nCPU:    Test CPU\nGPU:    Test GPU\nMemory: 16 GiB\n";
+    var seven_line = "Distro: Test OS\nHost:   testbox\nKernel: Linux 1.0.0\nUptime: 1d 2h 3m\nCPU:    Test CPU\nGPU:    Test GPU [8 GiB]\nMemory: 16 GiB\n";
     assert_buf_eq(&out7, pos7, seven_line, "seven-line ADR-contract assembly");
+
+    # Same seven lines with the accelerator's size unavailable —
+    # locks the ADR 0003 degrade path at the assembled level, i.e.
+    # proves a size-less probe reproduces the pre-0003 output bytes
+    # exactly rather than leaking a placeholder into the line.
+    var out7b[1024];
+    var pos7b = 0;
+    var r7b = iam_render(&out7b + pos7b, 1024 - pos7b, "Distro", "Test OS");
+    pos7b = pos7b + r7b;
+    r7b = iam_render(&out7b + pos7b, 1024 - pos7b, "Host", "testbox");
+    pos7b = pos7b + r7b;
+    r7b = iam_render_kernel(&out7b + pos7b, 1024 - pos7b, "Kernel", "Linux", "1.0.0");
+    pos7b = pos7b + r7b;
+    r7b = iam_render_buf(&out7b + pos7b, 1024 - pos7b, "Uptime", "1d 2h 3m", 8);
+    pos7b = pos7b + r7b;
+    r7b = iam_render(&out7b + pos7b, 1024 - pos7b, "CPU", "Test CPU");
+    pos7b = pos7b + r7b;
+    r7b = iam_render_gpu(&out7b + pos7b, 1024 - pos7b, "GPU", "Test GPU", "8 GiB", 0);
+    pos7b = pos7b + r7b;
+    r7b = iam_render_buf(&out7b + pos7b, 1024 - pos7b, "Memory", "16 GiB", 6);
+    pos7b = pos7b + r7b;
+    var seven_line_nomem = "Distro: Test OS\nHost:   testbox\nKernel: Linux 1.0.0\nUptime: 1d 2h 3m\nCPU:    Test CPU\nGPU:    Test GPU\nMemory: 16 GiB\n";
+    assert_buf_eq(&out7b, pos7b, seven_line_nomem,
+                  "seven-line assembly, GPU size unavailable");
 
     # ----- Degraded-probe assembled output --------------------------
     # All-probe-failure scenario: every required line renders as

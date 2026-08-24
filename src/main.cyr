@@ -72,6 +72,23 @@ fn main() {
     var ulen = 0;
     if (usecs >= 0) { ulen = iam_format_uptime(usecs, &upout, 24); }
 
+    # Accelerator count gates the optional GPU line; the first
+    # device's on-device memory becomes its "[3 GiB]" suffix (ADR
+    # 0003). Mirrors the Memory block above — probe bytes, format
+    # into scratch, hand the driver a buf+len.
+    #
+    # mihi_gpu_memory_bytes returns 0 - 1 for an out-of-range index
+    # and 0 where the backend carries no size figure; both fall
+    # below the `> 0` gate, so glen stays 0 and the line degrades to
+    # the bare device name. No probe is issued at all when the box
+    # has no accelerator.
+    var ngpu = mihi_gpu_count();
+    var gbytes = 0 - 1;
+    if (ngpu > 0) { gbytes = mihi_gpu_memory_bytes(0); }
+    var gmemout[24];
+    var glen = 0;
+    if (gbytes > 0) { glen = iam_format_bytes(gbytes, &gmemout, 24); }
+
     # Accumulate the seven possible lines into one output buffer,
     # then flush with a single write syscall. Order matches the
     # ADR 0002 contract — identity → runtime → hardware spine:
@@ -108,12 +125,14 @@ fn main() {
     # Optional GPU line — slotted between CPU and Memory to keep the
     # hardware block contiguous. Suppressed entirely when
     # mihi_gpu_count is 0 (not an error: most servers and CI runners
-    # have no accelerator). On count >= 1 we emit the first device;
-    # multi-GPU boxes are rare enough that iam stays whoami-simple
-    # here (ADR 0002 alternatives-considered).
-    var ngpu = mihi_gpu_count();
+    # have no accelerator, and neither does a headless agnos box).
+    # On count >= 1 we emit the first device; multi-GPU boxes are
+    # rare enough that iam stays whoami-simple here (ADR 0002
+    # alternatives-considered). Name plus optional size suffix per
+    # ADR 0003; `glen == 0` renders the bare name.
     if (ngpu > 0) {
-        n = iam_render(&out + pos, IAM_OUT_CAP - pos, "GPU", mihi_gpu_name(0));
+        n = iam_render_gpu(&out + pos, IAM_OUT_CAP - pos, "GPU",
+                           mihi_gpu_name(0), &gmemout, glen);
         if (n > 0) { pos = pos + n; }
     }
 

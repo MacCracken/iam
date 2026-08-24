@@ -173,6 +173,59 @@ fn iam_render_kernel(out, cap, label, name, version): i64 {
     return pos;
 }
 
+# Specialised GPU-line renderer: device name plus, when the probe
+# knows it, the accelerator's on-device memory as a trailing
+# bracketed suffix —
+#   "GPU:    AMD Radeon (PCI 0x1002:0x1638) [3 GiB]"
+# `membuf`/`mlen` carry a pre-formatted size from the driver's
+# `iam_format_bytes` scratch, same buf+len convention as
+# `iam_render_buf` (the renderers lay out bytes; the driver owns
+# formatting). Contract per docs/adr/0003-gpu-line-memory-suffix.md.
+#
+# Two degrade paths, both of them silent:
+#   - `name == 0` routes through the unknown fallback, consistent
+#     with ADR 0001 §4 — the device name is the load-bearing fact,
+#     so a size with no name is not a line worth printing.
+#   - `mlen <= 0` renders the name alone, byte-for-byte what the
+#     pre-ADR-0003 GPU line emitted. mihi returns 0 - 1 from
+#     mihi_gpu_memory_bytes for an out-of-range index and 0 where
+#     the backend has no size figure; neither is an error, and
+#     neither earns an `(unknown)` in a suffix that is itself
+#     optional.
+#
+# Brackets, not parens: mihi device names already carry a
+# parenthesised PCI id, so a parenthesised suffix would read as a
+# second nested id ("AMD Radeon (PCI 0x1002:0x1638) (3 GiB)").
+fn iam_render_gpu(out, cap, label, name, membuf, mlen): i64 {
+    if (name == 0) { return iam_render(out, cap, label, 0); }
+    if (mlen <= 0) { return iam_render(out, cap, label, name); }
+    var llen = strlen(label);
+    var pos = iam_copy(out, cap, 0, label, llen);
+    if (pos < 0) { return 0 - 1; }
+    pos = iam_put(out, cap, pos, 58);  # ':'
+    if (pos < 0) { return 0 - 1; }
+    var pad = IAM_LABEL_WIDTH - llen - 1;
+    if (pad < 1) { pad = 1; }
+    while (pad > 0) {
+        pos = iam_put(out, cap, pos, 32);
+        if (pos < 0) { return 0 - 1; }
+        pad = pad - 1;
+    }
+    pos = iam_copy_value(out, cap, pos, name, strlen(name));
+    if (pos < 0) { return 0 - 1; }
+    pos = iam_put(out, cap, pos, 32);  # ' '
+    if (pos < 0) { return 0 - 1; }
+    pos = iam_put(out, cap, pos, 91);  # '['
+    if (pos < 0) { return 0 - 1; }
+    pos = iam_copy_value(out, cap, pos, membuf, mlen);
+    if (pos < 0) { return 0 - 1; }
+    pos = iam_put(out, cap, pos, 93);  # ']'
+    if (pos < 0) { return 0 - 1; }
+    pos = iam_put(out, cap, pos, 10);  # '\n'
+    if (pos < 0) { return 0 - 1; }
+    return pos;
+}
+
 # Write decimal `n` (>= 0) into `buf` starting at offset 0. Returns
 # bytes written, or 0 if `cap` was too small. Pure function — no
 # syscalls, no null terminator. Shared between bytes / uptime

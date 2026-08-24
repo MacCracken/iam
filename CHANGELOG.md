@@ -4,6 +4,70 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+**The GPU line reports how much memory the accelerator has.**
+iam has consumed `mihi_gpu_count()` and `mihi_gpu_name()` since v0.4.0 and ignored
+`mihi_gpu_memory_bytes()` the whole time — the hardware block said which GPU but not how
+much VRAM, the one figure `Memory:` answers for system RAM one line below. Closing that
+gap is also what carries the AGNOS kernel's new `gpu_caps` **`vram_mb`** field
+(syscall **#89**, the opt-in `len >= 96` identity tier) all the way to a human: the kernel
+exposes it, mihi bridges it, and iam was the layer dropping it on the floor.
+
+### Added
+
+- **`iam_render_gpu` renderer** (`src/display.cyr`) — fourth renderer alongside
+  `iam_render` / `iam_render_buf` / `iam_render_kernel`. Lays out
+  `GPU:    <name> [<size>]`, taking the size as a caller-formatted `buf + len` (the same
+  convention `iam_render_buf` uses for `Uptime:` and `Memory:`, so the renderers keep
+  laying out bytes and the driver keeps owning formatting). Device-name bytes route
+  through `iam_copy_value`, so the F-001 sanitizer covers the composed line exactly as it
+  covered the bare one.
+- **[ADR 0003](docs/adr/0003-gpu-line-memory-suffix.md)** — the GPU value column's
+  contract: first device only, brackets not parens, `iam_format_bytes` units, silent
+  degrade. Extends ADR 0002 §3's value column; ADR 0002's line order, label set, and
+  six-or-seven-line count guarantee are untouched.
+- **17 assertions** in `tests/iam.tcyr` (105 → **122**): the `iam_render_gpu` group
+  (suffix shape, the real archaemenid parenthesised-PCI-id name, both degrade paths,
+  `name = 0` with and without a size, overflow, ESC sanitization on the composed line)
+  plus a second assembled seven-line case locking the size-unavailable shape.
+
+### Changed
+
+- **`GPU:` value column gains a bracketed size suffix when the probe knows the size**
+  (`src/main.cyr`). On archaemenid the line moves from
+  `GPU:    AMD Radeon (PCI 0x1002:0x1638)` to
+  `GPU:    AMD Radeon (PCI 0x1002:0x1638) [3 GiB]`. Brackets rather than parens because
+  mihi device names already end in a parenthesised PCI id. Formatting routes through the
+  existing `iam_format_bytes`, so VRAM and RAM use identical binary-floor units.
+- **Silent degrade preserves the old bytes exactly.** `mihi_gpu_memory_bytes` returns
+  `0 - 1` for an out-of-range index and `0` where the backend has no size figure; both
+  fall below the driver's `> 0` gate and the line renders as the bare device name —
+  byte-for-byte what v1.1.5 emitted. No `(unknown)` placeholder: `(unknown)` exists so a
+  *required* value column never blanks, and this suffix is optional. `mihi_gpu_name(0) == 0`
+  still renders `GPU:    (unknown)` regardless of the size.
+
+### Verified
+
+- **archaemenid (Linux 7.1.5):** `./build/iam` renders
+  `GPU:    AMD Radeon (PCI 0x1002:0x1638) [3 GiB]`. Linux sysfs
+  (`mem_info_vram_total` = 3221225472) and the AGNOS `#89` `vram_mb` field (3072) report
+  the same 3 GiB on this silicon, so the line reads identically on both platforms.
+- `cyrius build src/main.cyr build/iam` **OK**; `cyrius build --agnos` **OK**;
+  `cyrius lint src/display.cyr src/main.cyr` 0 warnings; `cyrius test` **122/0**.
+
+### Notes
+
+- **Line order, label set, label width, `(unknown)` policy, and exit-0 are unchanged** —
+  the v1.0 freeze covers those, and this cut moves none of them. Output stays six or seven
+  lines. Per `state.md`'s post-v1.0 stewardship clause ("an addition that fits cleanly
+  alongside the spine needs ADR justification and re-audit but can ship in a `Minor` cut"),
+  this is a `Minor`-eligible change; the version number is left for the maintainer to name.
+- **Multi-GPU policy unchanged** — still the first device only (ADR 0002 §3). N GPU lines
+  would break the six-or-seven-line count guarantee, which *is* frozen. Consumers needing
+  per-device detail call mihi directly.
+- **AGNOS rendering is gated on mihi**, not on iam. The GPU row and its suppress-on-zero
+  behaviour have existed since v0.4.0; it stays absent on AGNOS until mihi's
+  `mihi_gpu_count()` reads syscall #89. No further iam change is required when it lands.
+
 ## [1.1.5] — 2026-07-02
 
 **Fix: iam faulted on agnos (never rendered) — a user-stack overflow, plus the CPU line.**

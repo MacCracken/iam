@@ -1,7 +1,7 @@
 Distro: Arch Linux
 Host:   archaemenid
-Kernel: Linux 7.0.5-arch1-1
-Uptime: 33m
+Kernel: Linux 7.1.5-arch1-1
+Uptime: 23m
 CPU:    AMD Ryzen 7 5800H with Radeon Graphics
-GPU:    AMD Radeon (PCI 0x1002:0x1638)
+GPU:    AMD Radeon (PCI 0x1002:0x1638) [3 GiB]
 Memory: 59 GiB

@@ -5,7 +5,34 @@
 
 ## Version
 
-**1.1.1** — shipped 2026-06-18. **Toolchain + dep refresh.**
+**Unreleased** — the `GPU:` line gained an on-device-memory suffix
+(`AMD Radeon (PCI 0x1002:0x1638) [3 GiB]`) per
+[`docs/adr/0003-gpu-line-memory-suffix.md`](../adr/0003-gpu-line-memory-suffix.md).
+iam had consumed `mihi_gpu_count()` / `mihi_gpu_name()` since v0.4.0
+and ignored `mihi_gpu_memory_bytes()`; wiring it in is also what
+carries the AGNOS kernel's new `gpu_caps` **`vram_mb`** field
+(syscall **#89**, `len >= 96` identity tier) up to a printed line.
+New `iam_render_gpu` renderer in `src/display.cyr`; tests 105 →
+**122**. Degrades silently to the bare device name when the probe
+carries no size, so hosts that learned nothing emit v1.1.5's exact
+bytes. Line order, label set, label width, `(unknown)` policy, and
+exit-0 are untouched — output is still six or seven lines. Version
+number left for the maintainer to name (`Minor`-eligible per the
+stewardship clause below).
+
+**Current release**: **1.1.5** — shipped 2026-07-02. Fixed the agnos
+user-stack overflow that made `run /bin/iam` fault before printing
+anything (heap-allocated the 8 KiB cpu + 4 KiB mem `/proc` scratch
+buffers, dropping the `main` frame from ~17.6 KB to ~5.5 KB against
+agnos's ~12 KB budget) and bumped `[deps.mihi]` to **1.2.1** for the
+CPUID brand-string fix that actually compiles under `--agnos`. The
+1.1.2 → 1.1.4 cuts were mihi repins (agnos build-target probes,
+sovereign CPUID CPU-model probe) and the `agnosys` → `sys` stdlib
+rewire. Full history in
+[`../../CHANGELOG.md`](../../CHANGELOG.md); the per-release detail
+below stops at 1.1.1 and has not been backfilled.
+
+**Previous**: 1.1.1 — shipped 2026-06-18. **Toolchain + dep refresh.**
 `[package].cyrius` 6.0.1 → **6.2.22** (matches mihi 1.1.1's pin),
 `[deps.mihi]` 1.0.0 → **1.1.1**. The 6.2.x stdlib reorg lands:
 `agnosys` leaves the stdlib and becomes a git dep
@@ -103,30 +130,35 @@ No flags planned for v1.0 beyond standard `--help` / `--version`.
   buffer, flushes once. Optional GPU line is inlined here (single
   probe, single line, suppress-on-zero).
 - `src/display.cyr` — `iam_render` / `iam_render_buf` /
-  `iam_render_kernel` line renderers (write-into-buffer, return
-  bytes-written), `iam_format_bytes` (binary units, floor),
-  `iam_uint_into` shared digit helper, `iam_put` / `iam_copy`
-  internal append+bounds primitives.
+  `iam_render_kernel` / `iam_render_gpu` line renderers
+  (write-into-buffer, return bytes-written), `iam_format_bytes`
+  (binary units, floor), `iam_uint_into` shared digit helper,
+  `iam_put` / `iam_copy` internal append+bounds primitives.
+  `iam_render_gpu` composes device name + optional bracketed size
+  (ADR 0003) and degrades to the bare name when the size is absent.
 - `src/uptime.cyr` — `iam_format_uptime` (seconds → "1d 2h 3m" with
   zero-elision + `<1m` floor).
 
 ## Output
 
-Current sample (on archaemenid, 2026-05-19):
+Current sample (on archaemenid, 2026-08-01):
 
 ```
 Distro: Arch Linux
 Host:   archaemenid
-Kernel: Linux 7.0.5-arch1-1
-Uptime: 33m
+Kernel: Linux 7.1.5-arch1-1
+Uptime: 20m
 CPU:    AMD Ryzen 7 5800H with Radeon Graphics
-GPU:    AMD Radeon (PCI 0x1002:0x1638)
+GPU:    AMD Radeon (PCI 0x1002:0x1638) [3 GiB]
 Memory: 59 GiB
 ```
 
 On a GPU-less host (most servers, hosted CI runners) the GPU line
 is suppressed and `Memory` slides up to position 6; the output is
-six lines instead of seven.
+six lines instead of seven. Where an accelerator is present but its
+on-device memory is unknown, the `[3 GiB]` suffix is omitted and the
+line carries the bare device name (ADR 0003) — byte-identical to
+what iam emitted before the suffix existed.
 
 Layout contract (locked by [`docs/adr/0002-output-shape-reorder.md`](../adr/0002-output-shape-reorder.md),
 which supersedes ADR 0001 §2-§3; ADR 0001 §1, §4, §5, §6 carry over
@@ -142,26 +174,35 @@ unchanged. Freezes at v1.0):
 - The GPU line is the only optional line. Six required labels
   always appear in their documented order; GPU slots between CPU
   and Memory iff an accelerator is detected, keeping the hardware
-  block contiguous.
+  block contiguous. Its value column is the first device's name
+  plus, when the probe knows it, a bracketed on-device-memory
+  suffix (ADR 0003). Multi-GPU hosts still get exactly one GPU
+  line — the six-or-seven-line count guarantee is part of the
+  frozen shape.
 - Exit 0 always — probe failure is signaled in `(unknown)`, not
   the exit code (login MOTD under `set -e` must not be tripped).
 
 ## Tests
 
-- `tests/iam.tcyr` — 105 assertions:
+- `tests/iam.tcyr` — 122 assertions:
   - Formatter logic (51): `iam_uint_into`, `iam_format_bytes`
     (boundary + floor + preview cases), `iam_format_uptime`
     (zero-elision, fresh-boot floor, cap-too-small).
-  - ADR-contract byte-exact (39): per-label padding for all seven
+  - ADR-contract byte-exact (41): per-label padding for all seven
     labels, `(unknown)` fallback paths through every renderer
-    variant, full six-line + seven-line assembled output, full
-    all-probes-failed degraded shape. Regenerated at v0.8.0
-    against the ADR 0002 order.
+    variant, full six-line + two seven-line assembled outputs (GPU
+    size present / absent), full all-probes-failed degraded shape.
+    Regenerated at v0.8.0 against the ADR 0002 order.
   - F-001 TTY-escape sanitization byte-exact (15): `iam_copy_value`
     boundary (0x1F / 0x20 / TAB); ESC in `iam_render` value;
     newline-injection attempt; ESC mid-buffer in `iam_render_buf`;
     ESC + TAB in `iam_render_kernel` name + version; unchanged
     `IAM_UNKNOWN_TEXT` fallback path.
+  - ADR 0003 GPU value column (15): bracketed size suffix, the real
+    archaemenid parenthesised-PCI-id device name, both size-absent
+    degrade paths (`mlen = 0` and mihi's `0 - 1` sentinel),
+    `name = 0` with and without a size, overflow signaling, ESC
+    sanitization on the composed line.
 - `tests/iam.bcyr` — benchmark stub (`noop` micro-bench).
 - `tests/iam.fcyr` — fuzz stub.
 
