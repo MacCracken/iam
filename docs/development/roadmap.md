@@ -220,12 +220,12 @@ conversation reopens.
 
 ## Pending upstream — agnosys → agnodrm decomposition
 
-- [ ] **Drop the transitive agnosys dep.** iam references no agnosys symbol
-  itself; it pulls `agnosys-core` only so mihi's vendored bundle resolves
-  `agnosys_uname`. iam's dep drops automatically once **mihi** re-sources uname
-  (gated on the cyrius uname/sysinfo request — see the mihi roadmap). Redirect-safe
-  meanwhile (git+tag `1.4.0`, not broken). No iam code change when it lands — just
-  remove `[deps.agnosys]`.
+- [x] **Drop the transitive agnosys dep.** ✅ **Closed.** iam referenced no agnosys
+  symbol itself; it pulled `agnosys-core` only so mihi's vendored bundle could resolve
+  `agnosys_uname`. mihi re-sourced uname at its 1.1.3 cut (`sys_uname` / `sys_sysinfo`,
+  off the cyrius stdlib `sys` module carved out at 6.1.28), so `[deps.agnosys]` came out
+  of `cyrius.cyml` at iam **1.1.3** — no iam code change, exactly as predicted. The last
+  physical trace, the orphaned `lib/agnosys-core.cyr`, was pruned at **1.1.6**.
 
 ## Cross-references
 

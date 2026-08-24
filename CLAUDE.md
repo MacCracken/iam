@@ -37,10 +37,11 @@ Project was scaffolded with `cyrius init iam`. **Do not manually create project 
 ## Quick Start
 
 ```sh
-cyrius deps                          # resolve stdlib + mihi (when wired)
+cyrius deps                          # resolve stdlib + mihi + ai-hwaccel
+cyrius lib sync --full               # re-vendor lib/ after a toolchain-pin bump
 cyrius build src/main.cyr build/iam  # compile
-./build/iam                           # prints "iam v0.1.0 — scaffold"
-cyrius test                           # run tests/*.tcyr
+./build/iam                          # print the system card
+cyrius test tests/iam.tcyr           # run the suite
 ```
 
 ## Key Principles

@@ -6,7 +6,7 @@ type: state
 
 # Documentation Health — iam
 
-> **Last refresh**: 2026-05-19 (v0.9.0 RC cut — F-001 sanitizer landed, follow-up audit filed, **no remaining v1.0 blockers on the iam side**; only external gate is mihi 1.0 ship). Tree is 15 markdown docs + the canonical root files; every row currently reads ✅ Fresh. **Prior refresh**: 2026-05-19 v0.8.0 — ADR 0002 accepted, output-shape reorder. **Prior**: 2026-05-19 v0.7.0 — initial scaffold, M5.5 audit closeout. | **Refresh cadence**: when docs are touched, update the affected row.
+> **Last refresh**: 2026-08-23 (v1.1.6 cut — GPU-memory suffix (ADR 0003) + toolchain/dep-floor refresh: cyrius `6.2.37` → `6.5.35`, mihi `1.2.1` → `1.2.4`, ai-hwaccel `2.2.6` → `2.3.18`, `sakshi` added to the stdlib list, `lib/` re-vendored and ten orphans pruned). Rows touched this cut: `VERSION`, `cyrius.cyml`, `cyrius.lock`, `CHANGELOG.md`, `docs/benchmarks.md`, `development/state.md`, `development/roadmap.md`. **Note**: rows *not* listed there carry dates from the v0.9.0-era sweep and have not been re-read since — the row dates are honest, the blanket "every row reads ✅ Fresh" claim below is the stale part, and a full re-sweep is the next doc-health job. **Prior refresh**: 2026-05-19 v0.9.0 RC — F-001 sanitizer landed, follow-up audit filed. **Prior**: 2026-05-19 v0.8.0 — ADR 0002 accepted, output-shape reorder. | **Refresh cadence**: when docs are touched, update the affected row.
 > **Scope**: This repo only (`iam`) — the entire `docs/` tree plus root-level files (README, CHANGELOG, CLAUDE.md, VERSION, cyrius.cyml, cyrius.lock, SECURITY.md, CONTRIBUTING.md, CODE_OF_CONDUCT.md, LICENSE). Mihi's docs live in the mihi repo and are not audited here; cross-repo dep state is captured in [`development/state.md`](development/state.md), not here.
 >
 > **Convention adopted from cyrius / agnosticos** (2026-05-19): same tier-table shape, scaled to iam's much smaller tree (~14 markdown docs vs cyrius's ~105). One ledger row per doc; rewrite-in-place as docs change.
@@ -45,17 +45,17 @@ cyrius.cyml, cyrius.lock). Bucket counts:
 
 | File | Last touched | Status | Action |
 |---|---|---|---|
-| `README.md` | 2026-05-19 | ✅ Fresh | Top-level project README. Touched at v0.7.0 cut. |
-| `CHANGELOG.md` | 2026-05-19 | ✅ Fresh | **Source of truth per CLAUDE.md.** Through v0.9.0 RC (M6 release candidate). Refreshed every release. |
-| `CLAUDE.md` | 2026-05-19 | ✅ Fresh | Process + procedures + project-identity. Volatile state delegated to `docs/development/state.md` per its own principle. |
-| `VERSION` | 2026-05-19 | ✅ Fresh | Single source of truth for version (`0.9.0` at last edit). `cyrius.cyml [package].version = "${file:VERSION}"` auto-tracks. |
-| `cyrius.cyml` | 2026-05-19 | ✅ Fresh | Manifest. Toolchain pin `6.0.1`; mihi `0.7.0`; ai-hwaccel `2.2.6`. |
-| `cyrius.lock` | 2026-05-19 | ✅ Fresh | Generated artifact. Refreshed by `cyrius deps` whenever pins move. |
+| `README.md` | 2026-08-23 | ✅ Fresh | Top-level project README. **Was the worst drift in the tree** — the *Status* section still read "Pre-1.0 scaffold (0.1.0). Prints version and exits" six releases after v1.0.0 froze the output shape, and the *Shape* section still called mihi "scaffolded; not yet a published dep." Rewritten at v1.1.6: real status, a sample of the seven-line output, the `(unknown)`/exit-0 policy, and a build snippet that matches what CI actually runs. Prior row claimed ✅ Fresh since 2026-05-19, which is exactly the failure mode this ledger exists to catch. |
+| `CHANGELOG.md` | 2026-08-23 | ✅ Fresh | **Source of truth per CLAUDE.md.** Through v1.1.6. Refreshed every release. |
+| `CLAUDE.md` | 2026-08-23 | ✅ Fresh | Process + procedures + project-identity. Volatile state delegated to `docs/development/state.md` per its own principle. *Quick Start* corrected at v1.1.6 — it still claimed `./build/iam` prints `"iam v0.1.0 — scaffold"`, and now names `cyrius lib sync --full` (needed after any `[package].cyrius` bump) and the explicit `cyrius test tests/iam.tcyr` form CI uses. |
+| `VERSION` | 2026-08-23 | ✅ Fresh | Single source of truth for version (`1.1.6` at last edit). `cyrius.cyml [package].version = "${file:VERSION}"` auto-tracks. |
+| `cyrius.cyml` | 2026-08-23 | ✅ Fresh | Manifest. Toolchain pin `6.5.35`; mihi `1.2.4`; ai-hwaccel `2.3.18`; 21-module stdlib list, byte-equal to mihi's `dist/mihi.deps` sidecar. |
+| `cyrius.lock` | 2026-08-23 | ✅ Fresh | Generated artifact. Refreshed by `cyrius deps` whenever pins move. 110 hash entries + 2 commit pins at v1.1.6. |
 | `SECURITY.md` | 2026-05-19 | ✅ Fresh | Threat-surface summary + reporting address. Threat model matches the M5 / M5.5 audit docs (mihi return-data abuse + TTY escape injection). |
 | `CONTRIBUTING.md` | 2026-05-19 | 🔵 Evergreen | Contribution conventions; touched only when the process changes. |
 | `CODE_OF_CONDUCT.md` | 2026-05-19 | 🔵 Evergreen | Standard COC; rarely changes. |
 | `LICENSE` | 2026-05-19 | 🔵 Evergreen | GPL-3.0-only. Frozen by the license choice. |
-| `docs/benchmarks.md` | 2026-05-19 | ✅ Fresh | Invocation-time benchmark methodology + four-point trend (v0.3.0 → M3@9df0859 → v0.5.0 → v0.9.0). M5 < 10 ms gate verified at ~1510 µs on archaemenid (6.6× headroom); F-001 sanitizer at v0.9.0 is invisible at this scale. Toolchain row resolved 6.0.0 → 6.0.1 at v0.9.0 (was the doc-health-flagged drift from the v0.7.0 scaffold). Refresh when a new benchmark run lands or a perf-relevant change ships. |
+| `docs/benchmarks.md` | 2026-08-23 | ✅ Fresh | Invocation-time benchmark methodology + four-point trend (v0.3.0 → M3@9df0859 → v0.5.0 → v0.9.0), plus a v1.1.6 interleaved A/B section kept deliberately *off* that table (host kernel and compiler both moved, so a fifth row would not be comparable). M5 < 10 ms gate holds — 1628 µs → 1578 µs median across the 1.1.5 → 1.1.6 dep floor, i.e. mihi 1.2.3's 126%-slower `mihi_cpu_model` is invisible at iam's scale. **Stale sub-part**: the *Reference host* table still records kernel 7.0.5 / cyrius 6.0.1, which is correct for the four-point trend and wrong for the A/B; the A/B section states its own host state inline. Refresh when a new benchmark run lands or a perf-relevant change ships. |
 
 ---
 
@@ -75,8 +75,8 @@ Non-obvious constraints not derivable from the code. iam's surface is small enou
 
 | File | Last touched | Status | Action |
 |---|---|---|---|
-| `state.md` | 2026-05-19 | ✅ Fresh | **Rotates every release.** v0.7.0 — M5.5 audit closeout; Version / Audit / Next sections all refreshed at this cut. |
-| `roadmap.md` | 2026-05-19 | ✅ Fresh | **Rotates per milestone.** M0 through M5.5 shipped; M6 (v0.9.0 RC + v1.0.0) is the remaining milestone, gated on F-001 mitigation + mihi 1.0. "Out of scope (for v1.0)" section restructured into honest "Not iam's job" vs "Deferred" splits at v0.6.0. |
+| `state.md` | 2026-08-23 | ✅ Fresh | **Rotates every release.** v1.1.6 — *Version* rewritten (GPU-memory suffix + dep-floor refresh), *Toolchain* pin corrected `6.2.22` → `6.5.35` (had drifted two cuts behind the manifest), *Dependencies* rewritten from scratch (it still described mihi 1.1.1 and a live `agnosys` dep, both wrong since 1.1.3) and given a vendored-`lib/` subsection, *Benchmarks* given a v1.1.6 row with a non-comparability note. |
+| `roadmap.md` | 2026-08-23 | ✅ Fresh | **Rotates per milestone.** M0 through M6 shipped (v1.0.0 froze the output shape). *Pending upstream — agnosys → agnodrm* checked off at v1.1.6: the dep itself came out at 1.1.3 when mihi rewired to `sys_uname`, and the orphaned `lib/agnosys-core.cyr` was pruned at 1.1.6, so the item had been silently satisfied for three cuts. "Out of scope (for v1.0)" section restructured into honest "Not iam's job" vs "Deferred" splits at v0.6.0. |
 
 ---
 
@@ -111,7 +111,7 @@ Per CLAUDE.md *Process P(-1)*: next renewal trigger is the mihi 1.0 repin (manda
 
 | File | Last touched | Status | Notes |
 |---|---|---|---|
-| `guides/getting-started.md` | 2026-05-19 | ✅ Fresh | Build / layout / "adding a display line" walk-through. References the scaffold-era source layout — verify the "Once M1+ ships" section is no longer hedging (M1 / M2 / M3 / M4 all shipped) at next touch. |
+| `guides/getting-started.md` | 2026-08-23 | ✅ Fresh | Build / layout / "adding a display line" walk-through. The flagged "Once M1+ ships" hedge is **resolved** at v1.1.6 — the layout section now describes the shipped source tree (including vendored `lib/`), the build snippet matches CI, and *Adding a display line* now states the thing it most needed to: since v1.0.0 froze the shape, adding or reordering a line is a major-version event, not an `Added` entry. |
 | `examples/sample-output.txt` | 2026-05-19 | ✅ Fresh | Canonical 7-line output captured on archaemenid. Referenced from ADR 0001. Refresh whenever the output shape changes (which won't happen post-v1.0 freeze). |
 | `examples/.gitkeep` | — | 📦 Trivial | Directory anchor. Not tracked here further. |
 

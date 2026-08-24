@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.6] — 2026-08-23
+
+**Two cuts in one: the GPU line learns how much memory the accelerator has, and the
+whole dependency floor moves up.** The output change is the headline; the refresh under
+it is what makes the headline reachable on more hosts, because mihi 1.2.4 is the release
+that gives an aarch64 box a real `CPU:` value instead of `(unknown)`.
+
 **The GPU line reports how much memory the accelerator has.**
 iam has consumed `mihi_gpu_count()` and `mihi_gpu_name()` since v0.4.0 and ignored
 `mihi_gpu_memory_bytes()` the whole time — the hardware block said which GPU but not how
@@ -44,6 +51,81 @@ exposes it, mihi bridges it, and iam was the layer dropping it on the floor.
   byte-for-byte what v1.1.5 emitted. No `(unknown)` placeholder: `(unknown)` exists so a
   *required* value column never blanks, and this suffix is optional. `mihi_gpu_name(0) == 0`
   still renders `GPU:    (unknown)` regardless of the size.
+- **Toolchain pin `6.2.37` → `6.5.35`** (`cyrius.cyml [package].cyrius`) — closes the
+  wrapper/manifest drift the installed toolchain had been reporting (`manifest-pin:
+  6.2.37 (drift — wrapper is 6.5.35)`). CI reads the pin out of the manifest, so no
+  workflow YAML changes (CLAUDE.md: never hardcode toolchain versions in CI).
+- **`[deps.mihi]` `1.2.1` → `1.2.4`.** Probe API unchanged — every one of the eleven
+  `mihi_*` symbols iam calls has the same signature and the same error sentinels, and
+  the rendered output is byte-identical on archaemenid. What the span buys iam is
+  upstream hardening it consumes for free: **1.2.3**'s A-1 fix (the `/proc` + `/sys`
+  read path could return a *plausible wrong value* on a short read or `-EINTR` rather
+  than an error — measured, not theoretical: a single `read` on `/proc/cpuinfo` returns
+  3288 of the 8192 bytes iam asks for) and **1.2.4**'s D-1 fix, a device-tree
+  `CPU:` source for aarch64 Linux where the probe previously returned nothing.
+- **`[deps.ai-hwaccel]` `2.2.6` → `2.3.18`**, matching mihi 1.2.4's own transitive pin.
+  Twelve upstream releases including three symbol de-collisions (`ERR_*` → `HWA_ERR_*`,
+  `registry_new` → `hw_registry_new`, `BACKEND_COUNT` → `AIHW_BACKEND_COUNT`). None
+  reach iam — it references no ai-hwaccel symbol directly; the bundle is present only so
+  mihi's `gpu.cyr` parses.
+- **`sakshi` added to `[deps] stdlib`.** ai-hwaccel 2.3.x routes its detect-path
+  diagnostics through it, and the bundle is one concatenation, so the parser needs the
+  module in scope even though iam logs nothing. This is not a guess: mihi 1.2.2 ships a
+  `dist/mihi.deps` sidecar declaring the required fold, and iam's list is now that
+  sidecar exactly — 21 modules, no drift.
+- **`lib/` re-vendored at the 6.5.35 snapshot** (`cyrius lib sync --full`) — 108 `.cyr`
+  files, clearing the `./lib/ shadows version-pinned .../6.5.35/lib — 10 bundled lib(s)
+  differ` warning that the pin bump surfaced (`ganita`, `niyama`, `sigil`, `sandhi`,
+  `yukti`, `patra`, `vani`, `mabda`, `sankoch`, `yantra` were all still at their
+  6.2.22-era versions). New to the tree with this snapshot: the `lib/unicode/`
+  sub-package (7 files) plus `async_macos`, `async_win`, `thread_macos`. iam links none
+  of them; DCE drops them from the binary.
+
+### Removed
+
+- **Ten orphaned vendored modules pruned from `lib/`** — files absent from the 6.5.35
+  snapshot *and* undeclared in `[deps] stdlib`, so nothing could include them:
+  `agnosys-core.cyr` (left behind when the `[deps.agnosys]` git dep was dropped at
+  cyrius 6.2.37), `base64` / `bigint` / `csv` / `cyml` / `json` / `toml` / `u128`
+  (folded into the `bayan` distribution in the 6.2.x reorg) and `linalg` / `matrix`
+  (folded into `ganita`). Verified unreferenced by `src/`, `tests/`, `cyrius.cyml`, and
+  both dep bundles before removal; build, lint, tests, and runtime output are unchanged
+  without them. Same prune mihi did at its 1.2.2 cut — `lib/` now matches the pinned
+  snapshot exactly, plus the two dep bundles. `cyrius.lock` stays at **110** hash
+  entries — a coincidence worth spelling out, since the count alone would suggest
+  nothing moved: ten orphans left and ten new snapshot files arrived (`async_macos`,
+  `async_win`, `thread_macos`, and the seven `lib/unicode/` files).
+
+### Fixed
+
+- **Documentation that had gone factually wrong**, found while re-checking the version
+  surface this cut touches:
+  - `README.md` — *Status* read **"Pre-1.0 scaffold (0.1.0). Prints version and exits"**,
+    six releases after v1.0.0 froze the output shape, and *Shape* still described mihi as
+    "currently scaffolded; not yet a published dep". Rewritten: real status, a sample of
+    the seven-line output, the `(unknown)` / exit-0 policy, and a build snippet matching
+    what CI runs. A speculative "renders via `darshana` ANSI primitives if any color is
+    ever desired" bullet was dropped from *Shape* — no such path exists, and *Shape*
+    describes what iam is. Colour itself stays a live post-v1 question, not a closed
+    one: ADR 0001 §5 keeps the door open for v2.0 behind a new ADR and a default-off
+    byte contract.
+  - `CLAUDE.md` *Quick Start* — claimed `./build/iam` prints `"iam v0.1.0 — scaffold"`.
+    Now also names `cyrius lib sync --full`, which any `[package].cyrius` bump needs and
+    which this cut needed.
+  - `docs/guides/getting-started.md` — the "Once M1+ ships" hedge (M1–M6 have all
+    shipped), plus the omission that mattered most: *Adding a display line* read like a
+    5-step checklist when, post-v1.0, adding or reordering a line is a major-version
+    event. Says so now.
+  - `docs/development/state.md` *Dependencies* — described **mihi 1.1.1** and a live
+    `agnosys` dep, neither true since 1.1.3; and *Toolchain* pinned `6.2.22` while the
+    manifest said `6.2.37`. Both rewritten against the shipped manifest.
+  - `docs/development/roadmap.md` — the *Pending upstream — agnosys → agnodrm* item sat
+    unchecked though it was satisfied at 1.1.3. Closed, with the history recorded.
+  - `docs/doc-health.md` — every row above claimed ✅ Fresh as of 2026-05-19. Rows for
+    the files this cut touched are re-dated with what actually changed; the header now
+    says plainly that the untouched rows have *not* been re-read and that a full
+    re-sweep is the next doc-health job, rather than leaving the blanket "every row
+    reads ✅ Fresh" line standing over demonstrably stale entries.
 
 ### Verified
 
@@ -53,6 +135,29 @@ exposes it, mihi bridges it, and iam was the layer dropping it on the floor.
   the same 3 GiB on this silicon, so the line reads identically on both platforms.
 - `cyrius build src/main.cyr build/iam` **OK**; `cyrius build --agnos` **OK**;
   `cyrius lint src/display.cyr src/main.cyr` 0 warnings; `cyrius test` **122/0**.
+- **Post-refresh gate, whole tree**: `cyrius build` **OK** on all three targets
+  (x86_64 / `--agnos` / `--aarch64`), `cyrius lint` **0 warnings** across all four
+  `src/*.cyr`, `cyrius test tests/iam.tcyr` **122 passed / 0 failed**. The CI smoke gate
+  replayed locally: 7 lines, `Distro Host Kernel Uptime CPU GPU Memory`, exit 0,
+  **empty stderr**, and `./build/iam` byte-identical to `./build/iam | cat` (pipe ==
+  TTY, ADR 0001 §5).
+- **No runtime regression on the login-hot path.** mihi 1.2.3 made `mihi_cpu_model`
+  126% slower on purpose (it was reading 3288 of 8192 bytes; now it reads all of them),
+  which is the one thing in this span that could have cost iam something. Measured as an
+  A/B rather than against the historical figure — old tree and new tree built by the
+  same cycc 6.5.35, interleaved, three trials each of the documented N=500 batch on
+  archaemenid:
+
+  | | trial 1 | trial 2 | trial 3 | median |
+  |---|---:|---:|---:|---:|
+  | 1.1.5 pins (mihi 1.2.1 / ai-hwaccel 2.2.6) | 1654 µs | 1628 µs | 1601 µs | **1628 µs** |
+  | this tree (mihi 1.2.4 / ai-hwaccel 2.3.18) | 1578 µs | 1601 µs | 1570 µs | **1578 µs** |
+
+  New is marginally *faster*, which is noise rather than a win — the point is that the
+  cpu_model change is invisible at iam's scale, because the GPU probe still dominates.
+  M5's < 10 ms cold-start gate holds with ~6.3× headroom. Interleaving matters here: the
+  historical 1510 µs trend row was taken on a different kernel and a different toolchain,
+  so it is not a valid control for this question.
 
 ### Notes
 
@@ -67,6 +172,26 @@ exposes it, mihi bridges it, and iam was the layer dropping it on the floor.
 - **AGNOS rendering is gated on mihi**, not on iam. The GPU row and its suppress-on-zero
   behaviour have existed since v0.4.0; it stays absent on AGNOS until mihi's
   `mihi_gpu_count()` reads syscall #89. No further iam change is required when it lands.
+- **`Minor`, not `Breaking`.** The v1.0 freeze covers line order, label set, label
+  width, the `(unknown)` policy, and exit-code discipline; this cut moves none of them.
+  The GPU value column gains an optional suffix (ADR 0003) and everything else is pins.
+- **iam never sees ai-hwaccel's log output, and that is mihi's doing, not luck.**
+  `sakshi` defaults to `SK_INFO`, so a bare `registry_detect_no_exec()` writes
+  `detect: profiles=N` to the *consumer's* stderr — which for iam would mean junk on the
+  terminal above the report. mihi 1.2.2's `_mihi_gpu_ensure()` saves the caller's level,
+  clamps to `SK_WARN` for the one detect call, and restores it. Confirmed on this tree:
+  stderr is **0 bytes**. Worth knowing because iam is the reason the clamp exists.
+- **`[deps.agnosys]` stays gone.** The roadmap's *Pending upstream* item ("drop the
+  transitive agnosys dep") was already satisfied at 1.1.3 when mihi rewired to
+  `sys_uname` / `sys_sysinfo`; this cut removes the last physical trace, the orphaned
+  `lib/agnosys-core.cyr`. Item closed.
+- **One pre-existing `cyrius fmt --check` divergence is left standing**, at
+  `src/main.cyr:109-110` and `:135`: three continuation lines, across two call sites, use
+  aligned-to-open-paren indentation where canonical style is 2 spaces per open paren. 6.5.35's formatter flags
+  what 6.2.37's accepted. Deliberately not auto-formatted — iam's CI gates on `cyrius
+  lint` (clean) and not on `cyrius fmt`, and the rewrite trades readable argument
+  alignment for the canonical indent. mihi took the opposite call for its test file at
+  1.2.2; iam's is a maintainer decision, not a blocker.
 
 ## [1.1.5] — 2026-07-02
 

@@ -34,24 +34,46 @@ Fifth member of the terminal-aesthetics set:
 ## Shape
 
 - Consumes [`mihi`](https://github.com/MacCracken/mihi) for the
-  CPU / RAM / kernel / uptime / distro / hostname probes (currently
-  scaffolded; not yet a published dep).
-- Renders via [`darshana`](https://github.com/MacCracken/darshana)
-  ANSI primitives if any color is ever desired.
+  CPU / RAM / GPU / kernel / uptime / distro / hostname probes —
+  a published dep, pinned in `cyrius.cyml`.
+- No color today, and no TTY detection: output is byte-identical to a
+  terminal and to a pipe, so `iam | awk ...` sees exactly what you see.
+  Deferred rather than ruled out — [ADR 0001 §5](docs/adr/0001-output-shape.md)
+  keeps color open for v2.0 behind its own ADR, defaulting to off.
 - One redraw per invocation. Login shell calls `iam`; output flushes;
   process exits. No daemon, no cache.
 
 ## Status
 
-Pre-1.0 scaffold (0.1.0). Prints version and exits.
+**v1.1.6.** The output shape froze at v1.0.0 — line order, label set,
+label width, the `(unknown)` fallback, and exit-0 discipline are a
+contract now, and changing any of them is a major-version event. See
+[ADR 0002](docs/adr/0002-output-shape-reorder.md).
+
+Six required lines, plus a seventh `GPU:` line when an accelerator is
+detected:
+
+```
+Distro: Arch Linux
+Host:   archaemenid
+Kernel: Linux 7.1.8-arch1-3
+Uptime: 1d 1h 6m
+CPU:    AMD Ryzen 7 5800H with Radeon Graphics
+GPU:    AMD Radeon (PCI 0x1002:0x1638) [3 GiB]
+Memory: 59 GiB
+```
+
+A probe that fails renders `(unknown)` rather than an error, and the
+exit code stays 0 — a login MOTD running under `set -e` must not trip
+the shell.
 
 ## Build
 
 ```sh
-cyrius deps                           # resolve stdlib
+cyrius deps                           # resolve stdlib + mihi + ai-hwaccel
 cyrius build src/main.cyr build/iam   # compile
-./build/iam                            # prints "iam v0.1.0 — scaffold"
-cyrius test                            # run tests/*.tcyr
+./build/iam                           # print the system card
+cyrius test tests/iam.tcyr            # run the suite
 ```
 
 ## License

@@ -112,6 +112,45 @@ shell login.
   individual mihi probes, not iam's renderer or syscall pattern.
   Profile mihi, not iam.
 
+## v1.1.6 — dependency-floor A/B (2026-08-23)
+
+Not appended to the table above, because it does not belong on that
+axis: the host has moved on (kernel 7.1.8 vs 7.0.5) and so has the
+compiler (cycc 6.5.35 vs 6.0.1), so a fifth row would invite a
+comparison the numbers cannot support.
+
+The question this cut had to answer was narrower and answerable:
+**mihi 1.2.3 made `mihi_cpu_model` 126% slower on purpose** — its
+audit found the probe was reading 3288 of the 8192 bytes its caller
+asked for, and the fix is to read all of them. Does that reach iam?
+
+Measured as an interleaved A/B on `archaemenid` with the compiler
+held constant at 6.5.35 — old tree built from `HEAD` (`git archive`
+into a scratch dir, its own `cyrius deps` at the 1.1.5 pins), new
+tree as shipped, alternating, three trials each of the standard
+N=500 batch:
+
+| Tree                                       | t1 | t2 | t3 | Median |
+| ------------------------------------------ | ---:| ---:| ---:| ------:|
+| 1.1.5 pins (mihi 1.2.1 / ai-hwaccel 2.2.6) | 1654 us | 1628 us | 1601 us | **1628 us** |
+| 1.1.6 pins (mihi 1.2.4 / ai-hwaccel 2.3.18) | 1578 us | 1601 us | 1570 us | **1578 us** |
+
+**Verdict**: no regression — the new tree is marginally *faster*, by
+less than the spread within either column, so the honest reading is
+"indistinguishable" rather than "faster". The `mihi_cpu_model` change
+is invisible at iam's scale for the same reason finding #1 of
+*What the trend says* predicts: the GPU probe still dominates the invocation, and a few
+extra KB of `/proc/cpuinfo` read is not a rounding error against it.
+M5's < 10 ms gate holds with ~6.3x headroom.
+
+**Why interleave.** Running all three old trials then all three new
+would confound the result with anything that drifted on the box in
+between (thermal state, page cache, background load). Alternating
+puts both arms through the same drift. This is also why the ~1510 us
+historical figure is not used as the control — a measurement from a
+different kernel and a different compiler cannot isolate a library
+change.
+
 ## Reproducing
 
 From the repo root with a built binary:
