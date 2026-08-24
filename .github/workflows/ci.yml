@@ -19,26 +19,70 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Cyrius toolchain
-        # Pulls the version pinned in cyrius.cyml [package].cyrius.
-        # Same pattern as mihi / darshana / chakshu / cyim — agnosticos
-        # ecosystem convention.
+        # The cyrius.cyml `[package].cyrius` pin is the single source of
+        # truth for the toolchain version — no version is hardcoded in this
+        # YAML (CLAUDE.md § Rules). Read the pin and hand it to the upstream
+        # installer. Same step as patra / mihi — agnosticos convention.
+        #
+        # Use the installer, not a hand-rolled curl+tar+cp. The installer
+        # lays out `$HOME/.cyrius/versions/<v>/{bin,lib}` — the *versioned*
+        # snapshot that `cyrius lib sync` reads from and that the compiler
+        # diffs `./lib/` against. The old hand-rolled copy populated only
+        # `$HOME/.cyrius/{bin,lib}`, leaving no versioned snapshot, so
+        # `cyrius lib sync` failed here with "snapshot lib not found at
+        # ~/.cyrius/versions/<v>/lib" and the lib-drift check below was
+        # impossible to run. release.yml had already been patched to call
+        # the installer; this brings CI onto the same path.
         run: |
-          CYRIUS_VERSION="${CYRIUS_VERSION:-$(grep 'cyrius *= *"' cyrius.cyml 2>/dev/null | head -1 | sed 's/.*"\(.*\)"/\1/')}"
+          set -e
+          CYRIUS_VERSION="$(grep '^cyrius = ' cyrius.cyml | head -1 | sed 's/cyrius = "\(.*\)"/\1/')"
+          [ -n "$CYRIUS_VERSION" ] || { echo "could not read [package].cyrius from cyrius.cyml"; exit 1; }
           echo "Installing Cyrius $CYRIUS_VERSION"
-          curl -sLO "https://github.com/MacCracken/cyrius/releases/download/$CYRIUS_VERSION/cyrius-$CYRIUS_VERSION-x86_64-linux.tar.gz"
-          tar xzf "cyrius-$CYRIUS_VERSION-x86_64-linux.tar.gz"
-          CYRIUS_DIR="cyrius-$CYRIUS_VERSION-x86_64-linux"
-          mkdir -p "$HOME/.cyrius/bin" "$HOME/.cyrius/lib"
-          cp "$CYRIUS_DIR/bin/"* "$HOME/.cyrius/bin/" 2>/dev/null || true
-          cp -r "$CYRIUS_DIR/lib/"* "$HOME/.cyrius/lib/" 2>/dev/null || true
-          chmod +x "$HOME/.cyrius/bin/"* 2>/dev/null || true
-          echo "$HOME/.cyrius/bin" >> $GITHUB_PATH
-          echo "CYRIUS_HOME=$HOME/.cyrius" >> $GITHUB_ENV
+          curl -sSf https://raw.githubusercontent.com/MacCracken/cyrius/main/scripts/install.sh | \
+            CYRIUS_VERSION="$CYRIUS_VERSION" sh
+          echo "$HOME/.cyrius/bin" >> "$GITHUB_PATH"
+
+      - name: Verify the versioned snapshot exists
+        # Cheap assertion that the installer did what the step above claims.
+        # If this ever fails, the lib-drift gate below would otherwise fail
+        # for a confusing second-order reason.
+        run: |
+          set -e
+          CYRIUS_VERSION="$(grep '^cyrius = ' cyrius.cyml | head -1 | sed 's/cyrius = "\(.*\)"/\1/')"
+          SNAP="$HOME/.cyrius/versions/$CYRIUS_VERSION/lib"
+          [ -d "$SNAP" ] || { echo "FAIL: no versioned snapshot at $SNAP"; exit 1; }
+          echo "OK: snapshot present ($(find "$SNAP" -name '*.cyr' | wc -l) .cyr files)"
+          cyrius version
 
       - name: Resolve dependencies
         # iam pulls stdlib + mihi (the probe library) + ai-hwaccel
         # (transitively via mihi/gpu.cyr). See cyrius.cyml [deps.*].
         run: cyrius deps
+
+      - name: Vendored lib/ matches the toolchain pin
+        # iam commits `lib/` (108 stdlib modules from the pinned snapshot +
+        # the two dep bundles). Re-syncing must therefore be a no-op — if it
+        # is not, the committed tree has drifted from the pin and the compiler
+        # has been quietly warning "./lib/ shadows version-pinned ..." on every
+        # build. That is not hypothetical: at v1.1.6 ten bundles (sigil,
+        # sandhi, mabda, yukti, ganita, niyama, patra, vani, sankoch, yantra)
+        # were still at their 6.2.22-era versions, shadowing the then-current pin.
+        # Nothing caught it, because this gate did not exist and `cyrius lib
+        # sync` could not run here at all under the old install step.
+        #
+        # `git status --porcelain`, not `git diff --exit-code`: a snapshot that
+        # adds a file (the 6.5.x snapshot added a whole lib/unicode/ sub-package) shows
+        # up as untracked, which `git diff` does not see.
+        run: |
+          set -e
+          cyrius lib sync --full
+          if [ -n "$(git status --porcelain lib/)" ]; then
+            echo "FAIL: vendored lib/ does not match the pinned snapshot."
+            echo "Run 'cyrius lib sync --full' locally and commit the result."
+            git status --porcelain lib/
+            exit 1
+          fi
+          echo "OK: lib/ matches the pinned snapshot"
 
       - name: Build
         run: |
@@ -279,8 +323,16 @@ jobs:
         run: |
           VERSION=$(cat VERSION | tr -d '[:space:]')
           echo "VERSION file: $VERSION"
-          grep -qE "^## \[${VERSION}\]" CHANGELOG.md \
-            || { echo "FAIL: CHANGELOG.md missing section [${VERSION}]"; exit 1; }
+          # The CHANGELOG's TOP release entry must be this version. A bare
+          # `grep '^## \[$VERSION\]'` passes on any *historical* mention, so a
+          # release could ship with no entry of its own as long as some older
+          # section happened to carry the number. Skip a leading
+          # `## [Unreleased]` — it is a valid section, just not a release.
+          # (Failure mode documented in patra's CI; same gate, same fix.)
+          CL_TOP=$(grep -E '^## \[' CHANGELOG.md | grep -viE '^## \[unreleased\]' \
+                   | head -1 | sed 's/^## \[\([^]]*\)\].*/\1/')
+          [ "$CL_TOP" = "$VERSION" ] \
+            || { echo "FAIL: CHANGELOG top release entry is [$CL_TOP], expected [$VERSION]"; exit 1; }
           grep -qE '^version *= *"\$\{file:VERSION\}"' cyrius.cyml \
             || { echo "FAIL: cyrius.cyml version no longer pulls from VERSION"; exit 1; }
           echo "Version consistent: VERSION = CHANGELOG = cyrius.cyml = $VERSION"

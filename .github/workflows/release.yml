@@ -84,22 +84,35 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Cyrius toolchain
+        # Identical to ci.yml's step — one install idiom per repo. The
+        # installer lays out ~/.cyrius/versions/<v>/{bin,lib}, the versioned
+        # snapshot `cyrius lib sync` reads from; a hand-rolled curl+tar+cp
+        # populates only ~/.cyrius/{bin,lib} and lib sync then fails with
+        # "snapshot lib not found at ~/.cyrius/versions/<v>/lib".
+        #
+        # This previously downloaded the release tarball and ran the
+        # install.sh *inside it*. That worked, but it pinned the installer to
+        # the toolchain version and left two different install idioms in one
+        # repo. Piping cyrius main's scripts/install.sh with CYRIUS_VERSION
+        # set is the ecosystem convention (patra, mihi); the installer still
+        # fetches the pinned release, so the toolchain is pinned even though
+        # the installer script is not.
         run: |
-          CYRIUS_VERSION=$(grep 'cyrius *= *"' cyrius.cyml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          set -e
+          CYRIUS_VERSION="$(grep '^cyrius = ' cyrius.cyml | head -1 | sed 's/cyrius = "\(.*\)"/\1/')"
+          [ -n "$CYRIUS_VERSION" ] || { echo "could not read [package].cyrius from cyrius.cyml"; exit 1; }
           echo "Installing Cyrius $CYRIUS_VERSION"
-          curl -sLO "https://github.com/MacCracken/cyrius/releases/download/$CYRIUS_VERSION/cyrius-$CYRIUS_VERSION-x86_64-linux.tar.gz"
-          tar xzf "cyrius-$CYRIUS_VERSION-x86_64-linux.tar.gz"
-          # Install via the upstream install.sh — it creates ~/.cyrius/versions/<v>/
-          # (bin + the stdlib snapshot) which `cyrius lib sync` reads from. The old
-          # hand-rolled curl+cp only populated ~/.cyrius/{bin,lib} with no versioned
-          # snapshot, so lib sync failed: "snapshot lib not found at ~/.cyrius/versions/<v>/lib".
-          CYRIUS_VERSION="$CYRIUS_VERSION" sh "cyrius-$CYRIUS_VERSION-x86_64-linux/install.sh"
-          echo "$HOME/.cyrius/bin" >> $GITHUB_PATH
+          curl -sSf https://raw.githubusercontent.com/MacCracken/cyrius/main/scripts/install.sh | \
+            CYRIUS_VERSION="$CYRIUS_VERSION" sh
+          echo "$HOME/.cyrius/bin" >> "$GITHUB_PATH"
 
       - name: Resolve dependencies
+        # `lib sync --full`, matching ci.yml's drift gate: the release build
+        # must compile against exactly the snapshot CI verified, not a subset.
         run: |
+          set -e
           cyrius deps
-          cyrius lib sync   # vendor stdlib modules (incl. `sys`) for mihi 1.1.3's sys_uname/sys_sysinfo
+          cyrius lib sync --full
 
       - name: Build release binary (DCE)
         # Release builds use CYRIUS_DCE=1 — iam pulls in mihi +

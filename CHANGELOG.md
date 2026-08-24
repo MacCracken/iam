@@ -98,6 +98,50 @@ exposes it, mihi bridges it, and iam was the layer dropping it on the floor.
 
 ### Fixed
 
+- **CI installed the toolchain by hand instead of using the installer, and that is why
+  the `lib/` drift above went unnoticed for three cuts.** `.github/workflows/ci.yml` did
+  `curl` the release tarball, `tar xzf`, then `cp` `bin/` and `lib/` into
+  `$HOME/.cyrius/`. That populates `$HOME/.cyrius/{bin,lib}` but creates **no
+  `$HOME/.cyrius/versions/<v>/` snapshot** — and the versioned snapshot is what `cyrius
+  lib sync` reads from and what the compiler diffs `./lib/` against to emit
+  `./lib/ shadows version-pinned ...`. With no snapshot, `cyrius lib sync` could not run
+  in CI at all (it fails with `snapshot lib not found at ~/.cyrius/versions/<v>/lib`) and
+  the shadow check silently had nothing to compare against. **The stale bundles this cut
+  found were therefore invisible to CI by construction, not by oversight.** Both
+  workflows now pipe cyrius's own `scripts/install.sh` with the pin from
+  `cyrius.cyml`, per patra's convention:
+
+  ```yaml
+  CYRIUS_VERSION="$(grep '^cyrius = ' cyrius.cyml | head -1 | sed 's/cyrius = "\(.*\)"/\1/')"
+  curl -sSf https://raw.githubusercontent.com/MacCracken/cyrius/main/scripts/install.sh | \
+    CYRIUS_VERSION="$CYRIUS_VERSION" sh
+  ```
+
+  `release.yml` was already calling an installer, but a third way — downloading the
+  tarball and running the `install.sh` *inside it*. It worked; it also meant one repo
+  carried two install idioms. Both are now the same step.
+- **New CI gate: `Vendored lib/ matches the toolchain pin`.** Runs `cyrius lib sync
+  --full` and fails if `git status --porcelain lib/` is non-empty — re-syncing a
+  correctly-vendored tree must be a no-op. This is the gate that would have caught this
+  cut's drift on the commit that introduced it. `git status --porcelain` rather than
+  `git diff --exit-code` because a snapshot that *adds* files (this pin added a whole
+  `lib/unicode/` sub-package) shows up as untracked, which `git diff` does not see.
+  Verified both ways before shipping: the gate passes on a committed copy of this tree,
+  and fails as intended when a stale `lib/fmt.cyr` and a missing `lib/unicode/` file are
+  injected. Also verified that the vendored `lib/` is byte-identical to the official
+  `cyrius-6.5.35-x86_64-linux.tar.gz` stdlib, so the gate cannot fire spuriously on a
+  local-vs-release snapshot difference.
+- **New CI gate: `Verify the versioned snapshot exists`** — asserts
+  `$HOME/.cyrius/versions/<pin>/lib` is there right after the install step, so a future
+  installer regression fails with that sentence rather than as a confusing second-order
+  failure in the drift gate.
+- **The version-consistency gate accepted any historical CHANGELOG mention.** It ran
+  `grep -qE "^## \[${VERSION}\]" CHANGELOG.md`, which passes as long as *some* section
+  carries the number — so a release could ship with no entry of its own. Now compares
+  against the **top** release entry (skipping `## [Unreleased]`). Confirmed against the
+  real file: the old form wrongly passes for `1.1.5`, the new form correctly rejects it.
+  Same failure mode, and the same fix, as patra's CI documents.
+
 - **Documentation that had gone factually wrong**, found while re-checking the version
   surface this cut touches:
   - `README.md` — *Status* read **"Pre-1.0 scaffold (0.1.0). Prints version and exits"**,
@@ -135,6 +179,18 @@ exposes it, mihi bridges it, and iam was the layer dropping it on the floor.
   the same 3 GiB on this silicon, so the line reads identically on both platforms.
 - `cyrius build src/main.cyr build/iam` **OK**; `cyrius build --agnos` **OK**;
   `cyrius lint src/display.cyr src/main.cyr` 0 warnings; `cyrius test` **122/0**.
+- **The CI changes were exercised locally, not just written.** Both workflow files
+  parse as valid YAML with the expected step lists. The pin extraction
+  (`grep '^cyrius = '`) returns `6.5.35` against the real manifest. Every gate in
+  `build-and-test` and `docs` was replayed step-for-step on this tree and passes. The two
+  new gates were checked in both directions: `Vendored lib/ matches the toolchain pin`
+  passes against the real committed tree — `cyrius deps && cyrius lib sync --full` leaves
+  `git status --porcelain lib/` empty — and fails as intended against an injected stale
+  `lib/fmt.cyr` plus a deleted `lib/unicode/categories.cyr`; the hardened
+  version-consistency gate rejects `1.1.5` where the old bare grep accepted it. The
+  vendored `lib/` was independently diffed against the official
+  `cyrius-6.5.35-x86_64-linux.tar.gz` — byte-identical across all 108 stdlib modules,
+  which is what makes the drift gate safe to make blocking.
 - **Post-refresh gate, whole tree**: `cyrius build` **OK** on all three targets
   (x86_64 / `--agnos` / `--aarch64`), `cyrius lint` **0 warnings** across all four
   `src/*.cyr`, `cyrius test tests/iam.tcyr` **122 passed / 0 failed**. The CI smoke gate

@@ -27,6 +27,9 @@ and ten orphaned pre-6.2.x modules were pruned — which nets out to
 an unchanged **110**-entry lock, ten files out and ten in.
 mihi's probe API is unchanged, so **zero `src/*.cyr` changes in the
 refresh half** and rendered output is byte-identical on archaemenid.
+(3) **CI now installs the toolchain with cyrius's own installer**
+rather than a hand-rolled `curl`+`tar`+`cp`, which is what makes the
+new vendored-`lib/` drift gate possible at all — see *Toolchain*.
 Line order, label set, label width, `(unknown)` policy, and exit-0
 are untouched — output is still six or seven lines. `Minor`-eligible
 per the stewardship clause below.
@@ -122,7 +125,25 @@ driver flushes the whole report with a single syscall.
 
 ## Toolchain
 
-- **Cyrius pin**: `6.5.35` (in `cyrius.cyml [package].cyrius`)
+- **Cyrius pin**: `6.5.35` (in `cyrius.cyml [package].cyrius`) — the
+  single source of truth. No workflow YAML hardcodes a version; both
+  `ci.yml` and `release.yml` read the pin out of the manifest.
+- **Install path (CI and local)**: cyrius's own
+  `scripts/install.sh`, invoked with `CYRIUS_VERSION` set to the pin.
+  This is load-bearing, not cosmetic — the installer lays out
+  `~/.cyrius/versions/<v>/{bin,lib}`, and that **versioned snapshot**
+  is what `cyrius lib sync` reads from and what the compiler diffs
+  `./lib/` against to emit `./lib/ shadows version-pinned ...`. A
+  hand-rolled `curl` + `tar` + `cp` populates only `~/.cyrius/{bin,lib}`,
+  which leaves `cyrius lib sync` failing outright (`snapshot lib not
+  found at ~/.cyrius/versions/<v>/lib`) and the shadow check with
+  nothing to compare against. CI carried exactly that hand-rolled step
+  until 1.1.6, which is why the vendored-`lib/` drift found at that cut
+  was invisible to CI by construction.
+- **Vendored `lib/` is gated.** CI runs `cyrius lib sync --full` and
+  fails if `git status --porcelain lib/` is non-empty — re-syncing a
+  correct tree must be a no-op. Reproduce locally with the same two
+  commands before committing a pin bump.
 
 ## Shape
 
