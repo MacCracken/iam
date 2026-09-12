@@ -77,9 +77,12 @@ fn main() {
     # One uname(2) syscall feeds three probes: kernel_name,
     # kernel_version, hostname. See mihi docs/adr/0001-shared-uts-buffer.md.
     var uts[390];
-    var ures = mihi_uname(&uts);
+    # mihi_uname returns a Result VALUE PAIR (tag, payload) since cyrius 6.6.0 —
+    # bind both. The Ok payload is just `uts` back, which we already hold, so only
+    # the tag is consulted; `uval` exists to complete the pair binding.
+    var utag, uval = mihi_uname(&uts);
     var uok = 1;
-    if (is_err_result(ures) == 1) { uok = 0; }
+    if (is_err_result(utag) == 1) { uok = 0; }
 
     # CPU model — 8 KiB scratch. HEAP, not stack: agnos gives a program only ~12 KB
     # of usable user stack (elf.cyr exec layout), so an 8 KiB stack buffer here + the
