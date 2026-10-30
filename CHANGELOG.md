@@ -4,6 +4,76 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-30
+
+**Toolchain `6.7.9` → `6.7.18`, mihi `1.3.0` → `1.3.2`, ai-hwaccel `2.4.2` → `2.5.5`,
+and bayan's thin JSON sublib declared as mihi declares it.** Latest tags of all three
+deps; ai-hwaccel 2.5.5 is mihi 1.3.2's own transitive and needs cyrius ≥ 6.7.16.
+Zero `src/` changes. Output on archaemenid is byte-identical to 1.2.0.
+
+### Changed
+
+- **`[package].cyrius` `6.7.9` → `6.7.18`.**
+- **`[deps.mihi]` `1.3.0` → `1.3.2`.** No signature changed. 1.3.2 is mihi's P(-1)
+  hardening sweep: the read path takes regular files only and opens with `O_NOCTTY`,
+  and several probes now return their error value for malformed input where 1.3.0
+  returned a plausible wrong one. iam renders those as `(unknown)`.
+- **`[deps.ai-hwaccel]` `2.4.2` → `2.5.5`.**
+- **`[deps.bayan]` added**: `optional = true`, tag `1.11.1`, `dist/bayan-json.cyr`,
+  with `[features] default = ["bayan"]`, the same declaration as mihi 1.3.2. The
+  `bayan` stdlib entry is unchanged. With both present, `cyrius deps` commit-pins the
+  dep (`965298d`, checked against the tag) and does not vendor `bayan-json.cyr`; it
+  prints `note: [deps.bayan] dist/bayan-json.cyr not vendored — 'bayan' is a stdlib
+  leaf here, and its fold lib/bayan.cyr is the package`.
+- **`cyrius.cyml` is a manifest again**: its comments are one-line purpose notes. The
+  history they carried is in this file and in `docs/development/state.md`.
+- **`lib/` and `cyrius.lock` regenerated from empty.** The 113-file 6.7.18 snapshot:
+  66 stdlib files changed, none added or removed, plus both dep bundles. The lock has
+  115 hashes, three commit pins (mihi `978ed67`, ai-hwaccel `0586202`, bayan
+  `965298d`, all checked against their tags) and a `cyrius 6.7.18` trailer.
+- **Binary size**: `build/iam` 879,072 → 1,471,616 B; `CYRIUS_DCE=1` (the release
+  build) 260,576 → 611,456 B. `lib/bayan.cyr` grew from 735,730 to 995,070 bytes
+  of source in the 6.7.18 snapshot, and `lib/ai-hwaccel.cyr` from 259,274 to
+  409,044.
+- **Runtime**: +18–24 % per invocation (*Verified*). The DCE and default 1.2.1
+  builds time the same, so the cost is probe work, not binary size.
+
+### GPU line: what changes with ai-hwaccel 2.5.5
+
+- **Fixed: the phantom "Google TPU v4"** (1.2.0 known issue). Each
+  `/sys/class/accel` node now goes to the backend its driver names: `intel_vpu` →
+  Intel NPU, `amdxdna` → AMD XDNA, `habanalabs` → Gaudi, `qaic` → Qualcomm.
+- **New in no-exec mode: Gaudi, Neuron, Cerebras and Graphcore**, found through
+  `/sys/class/accel` and `/dev`. Their memory is not read from the board: Gaudi and
+  Neuron are sized by generation, Cerebras is a fixed 44 GiB and Graphcore 900 MiB.
+  iam prints those in the ADR 0003 suffix.
+- **Unchanged: the NVIDIA / Intel Vulkan placeholder** size (4 GiB / 2 GiB) from
+  1.1.9.
+- **New, per mihi 1.3.2's audit (U-1): the PCIe pass can wake a runtime-suspended
+  GPU.** ai-hwaccel 2.4.2 read `current_link_{width,speed}`; 2.5.5 reads
+  `max_link_{width,speed}` first, which kernel 7.3 serves through
+  `pci_config_pm_runtime_get()`. On a hybrid-graphics laptop on kernel 7.3+, the
+  `mihi_gpu_count()` iam makes on every invocation can resume a dGPU from D3cold.
+  Not observable on archaemenid (kernel 7.2.11, one iGPU).
+
+### Verified
+
+On archaemenid (Ryzen 7 5800H, Radeon iGPU), replaying the `ci.yml` gates:
+
+- `cyrius deps --verify`: 115 verified, 0 failed
+- `cyrius lib sync --full` after `cyrius deps` is a no-op on `lib/`
+- `cyrius build src/main.cyr build/iam`: no warnings; output byte-identical to the
+  1.2.0 binary
+- `cyrius test tests/iam.tcyr`: **141 passed, 0 failed**, unchanged
+- `cyrius lint src/*.cyr` clean; `cyrius fmt --check` clean on `src/` and `tests/`
+- DCE parity: `CYRIUS_DCE=1` output byte-identical to the default build
+- cross-target: `--agnos src/main.cyr`, `--aarch64 src/main.cyr` and
+  `--aarch64 tests/iam.tcyr` compile with no warnings
+- F-004's flush checks: `iam | head -c 10` and `iam >&-` both exit 0
+- bench, load average 13–15: 1.2.0 → 1.2.1 medians 2037 → 2512 µs wall and
+  2062 → 2548 µs CPU, slower in all five pairs. Release (DCE) builds: 2027 →
+  2394 µs CPU. See [`docs/benchmarks.md`](docs/benchmarks.md).
+
 ## [1.2.0] - 2026-10-30
 
 **Toolchain `6.6.20` → `6.7.9`, mihi `1.2.8` → `1.3.0`.** iam's first release on the

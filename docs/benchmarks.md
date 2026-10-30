@@ -226,6 +226,42 @@ An earlier run the same minute, with the zsh `date +%s%N` loop, read
 ~2100 us for both builds as the load average climbed. It is not
 recorded as a result, because the load moved more than either build did.
 
+## v1.2.1 — cyrius 6.7.18 + ai-hwaccel 2.5.5 A/B (2026-10-30)
+
+Against 1.2.0: old binary built on 6.7.9 (mihi 1.3.0, ai-hwaccel
+2.4.2), new on 6.7.18 (mihi 1.3.2, ai-hwaccel 2.5.5). Same bash `time`
+harness as v1.2.0, five interleaved N=500 trials, load average 13–15
+throughout, so absolute figures sit ~400 µs above the quiet-box ones
+and only the relative gap carries.
+
+Default builds:
+
+| Tree | t1 | t2 | t3 | t4 | t5 | Median |
+| ------ | ---:| ---:| ---:| ---:| ---:| ------:|
+| v1.2.0 wall | 2166 us | 2027 us | 2062 us | 2037 us | 2006 us | **2037 us** |
+| v1.2.1 wall | 2570 us | 2606 us | 2480 us | 2512 us | 2508 us | **2512 us** |
+| v1.2.0 CPU  | 2106 us | 2034 us | 2062 us | 2070 us | 2058 us | **2062 us** |
+| v1.2.1 CPU  | 2572 us | 2581 us | 2518 us | 2548 us | 2545 us | **2548 us** |
+
+Release builds (`CYRIUS_DCE=1`, what `release.yml` ships), with the
+1.2.1 default build interleaved as a third arm, CPU time:
+
+| Tree | t1 | t2 | t3 | t4 | t5 | Median |
+| ------ | ---:| ---:| ---:| ---:| ---:| ------:|
+| v1.2.0 DCE (260,576 B)   | 2027 us | 2046 us | 2058 us | 2014 us | 1764 us | **2027 us** |
+| v1.2.1 DCE (611,456 B)   | 2468 us | 2424 us | 2394 us | 2324 us | 2136 us | **2394 us** |
+| v1.2.1 (1,471,616 B)     | 2424 us | 2469 us | 2442 us | 2218 us | 2352 us | **2424 us** |
+
+**Verdict**: a real regression, +18 % (release builds) to +24 %
+(default builds). 1.2.1 was slower in every pair, by about three times
+either column's spread. The 1.2.1 DCE and default builds time within
+30 µs of each other despite a 2.4x size difference, so the cost is
+probe work, not binary size. The pin moves the no-exec detection path
+from ai-hwaccel 2.4.2 to 2.5.5, which runs 16 backends with
+`allow_exec` 0 and adds `/dev` and `/sys/class/accel` scans and the
+`max_link_*` PCIe reads. M5's < 10 ms gate holds (~4x headroom even
+at this load).
+
 ## Reproducing
 
 From the repo root with a built binary:
