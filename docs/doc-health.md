@@ -76,7 +76,7 @@ Non-obvious constraints not derivable from the code. iam's surface is small enou
 | File | Last touched | Status | Action |
 |---|---|---|---|
 | `state.md` | 2026-10-30 | ✅ Fresh | **Rotates every release.** v1.2.1: *Version* rotated (1.2.0 demoted), *Toolchain* pin `6.7.9` → `6.7.18`, *Dependencies* moved to mihi 1.3.2 / ai-hwaccel 2.5.5 plus the bayan-json dep, *Benchmarks* gained a relative v1.2.1 row. |
-| `roadmap.md` | 2026-08-23 | ✅ Fresh | **Rotates per milestone.** M0 through M6 shipped (v1.0.0 froze the output shape). *Pending upstream — agnosys → agnodrm* checked off at v1.1.6: the dep itself came out at 1.1.3 when mihi rewired to `sys_uname`, and the orphaned `lib/agnosys-core.cyr` was pruned at 1.1.6, so the item had been silently satisfied for three cuts. "Out of scope (for v1.0)" section restructured into honest "Not iam's job" vs "Deferred" splits at v0.6.0. |
+| `roadmap.md` | 2026-10-30 | ✅ Fresh | **Open work only.** Patch work (verification on real targets, tests and tooling, audit, docs; no minor of its own), 1.3.x GPU line accuracy (upstream-gated), 1.x.x gated items. Shipped milestones (M0–M6, the v1.0 criteria, the agnosys item) removed; they are in the CHANGELOG. *Out of scope* wording updated past the v1.0 freeze; its decisions unchanged. |
 
 ---
 

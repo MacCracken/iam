@@ -1,163 +1,107 @@
 # iam — Roadmap
 
-> Milestone plan through v1.0. State lives in [`state.md`](state.md);
-> this file is the sequencing — what ships, in what order, against
-> what dependency gates.
+> Open work only, grouped into releases. Shipped work lives in
+> [`../../CHANGELOG.md`](../../CHANGELOG.md), live state in
+> [`state.md`](state.md). An item leaves this file when it ships; one
+> that slips moves to a later release rather than being marked done
+> here.
 
-## v1.0 criteria
+Every 1.x release keeps the v1.0 output contract: line order, label
+width, label spelling, the `(unknown)` fallback and exit 0, per
+[ADR 0002](../adr/0002-output-shape-reorder.md) and
+[ADR 0003](../adr/0003-gpu-line-memory-suffix.md). A change to any of
+them is a major-version bump.
 
-The iam v1.0 contract: a stable, terse, whoami-simple output that
-shells can rely on for MOTD and screenshot flex. Frozen output
-shape; mihi 1.0 dep pinned.
+## Patch work — no minor of its own
 
-- [ ] Output shape frozen — exact line order, label format, exit codes
-- [ ] Pinned to [`mihi`](https://github.com/MacCracken/mihi) 1.0.x
-      (consumed for every system-fact line)
-- [ ] Test coverage: happy path per output line + mihi-error
-      degraded-output path; 50+ assertions (iam is small)
-- [ ] Benchmarks captured in `docs/benchmarks.md` — `iam` invocation
-      time is a login-path concern (target: < 10ms cold start)
-- [ ] CHANGELOG complete from v0.1.0 onward
-- [ ] Security audit pass (`docs/audit/YYYY-MM-DD-audit.md`)
-- [ ] No theming engine, no plugin system, no configurable output —
-      this is a v1.0 gate, not just a non-goal
+Testing, verification, audit and docs ship in patch releases on
+whatever line is current.
 
-## Milestones
+### Verification on real targets
 
-### M0 — Scaffold (v0.1.0) — ✅ shipped 2026-05-19
+Several things `state.md` says about iam are true by compiling, not by
+running, on the current pins.
 
-- `cyrius init` scaffold landed
-- `./build/iam` prints scaffold version and exits
-- Doc-tree per [first-party-documentation.md](https://github.com/MacCracken/agnosticos/blob/main/docs/development/planning/first-party-documentation.md)
+- **AGNOS.** Run the `--agnos` build under QEMU through agnsh on the
+  current pins and record which lines render. iam last rendered on
+  AGNOS at 1.1.5 (kernel 1.45.10); 1.1.6 through 1.2.1 were
+  compile-checked only. mihi 1.3.2's AGNOS fixes (B-8 CPUID max leaf,
+  B-9 sysinfo bounds, B-10 uname seal, B-13 `mihi_distro` into `buf`)
+  land on iam's CPU, Memory, Uptime and Distro lines there.
+- **arm64 hardware.** Run `iam` and `tests/iam.tcyr` on an arm64 Linux
+  host. Every cut so far has only compiled `--aarch64`.
+- **Accelerator hosts.** The `GPU:` line has only been seen on
+  archaemenid (AMD iGPU through ROCm). Run iam on:
+  - an NVIDIA or Intel GPU host (the Vulkan placeholder sizes, 1.1.9);
+  - a Core Ultra or Ryzen AI host (the `/sys/class/accel` driver
+    routing that replaced the phantom TPU, 1.2.1);
+  - a hybrid-graphics laptop on kernel 7.3+, reading the dGPU's
+    `power/runtime_status` before and after an `iam` run (mihi audit
+    U-1).
+- **Benchmark re-baseline.** The 1.2.0 and 1.2.1 A/Bs ran at load
+  average 7–15, so their absolute figures are not comparable to the
+  earlier rows in `docs/benchmarks.md`. Re-run on a quiet box and
+  record the 1.2.1 cost (+18–24 % under load) as an absolute number.
+- **Acceptance**: each run recorded in `state.md` with date, host and
+  pins.
 
-### M1+M2 — Pin mihi + six display lines (v0.3.0) — ✅ shipped 2026-05-19
+### Tests and tooling
 
-Collapsed into one cut: mihi was already at 0.7.0 (past M3's gate)
-by the time iam reached M1, so the M1 (CPU/RAM/kernel) and M2
-(host/distro/uptime) line sets shipped together.
+- **Fuzz harness.** `tests/iam.fcyr` is a stub. Fuzz the display path:
+  `iam_copy_value` (sanitizer, `IAM_VALUE_MAX` clamp, UTF-8 back-off)
+  and the four renderers, with canary bands around the output buffer,
+  the way mihi 1.3.2's `tests/mihi.fcyr` does for its parsers.
+- **Benchmark harness.** `tests/iam.bcyr` times a no-op. Bench the
+  renderers in-process, and make the wall + CPU invocation harness used
+  at 1.2.0 and 1.2.1 the one `docs/benchmarks.md` *Reproducing* gives.
+- **CI parity with mihi 1.3.2**: a fuzz step, `cyrius lint --strict`,
+  and `tests/*.fcyr` in the fmt sweep.
 
-- `[deps.mihi]` pinned to 0.7.0; `[deps.ai-hwaccel]` 2.2.6 pulled in
-  transitively (mihi/gpu.cyr references inside `dist/mihi.cyr`).
-- Display lines: `CPU`, `Memory`, `Kernel`, `Host`, `Distro`, `Uptime`.
-- Pipe-aware: identical output on TTY and pipe (no color emitted).
-- Tests cover formatter logic (51 assertions); end-to-end probe
-  wiring verified by running `./build/iam` on the maintainer's box.
+### Audit
 
-### M3 — GPU line (v0.4.0) — ✅ shipped 2026-05-19
+- **P(-1) audit on the current pins.** The last full audit is v1.1.7
+  (cyrius 6.5.35, mihi 1.2.4). Since then: toolchain moves to 6.7.18,
+  mihi 1.2.5–1.3.2 (including its own 14-fix sweep), and ai-hwaccel
+  2.3.18 → 2.5.5. The re-audit triggers in `state.md` name major bumps
+  only, so none fired. File it in `docs/audit/`.
 
-- Trailing `GPU:` line emitted when `mihi_gpu_count() > 0`,
-  suppressed entirely otherwise (zero accelerators is not an error).
-- Multi-GPU policy (recorded for M4's ADR): show the first device.
-  Whoami-simple wins over multi-line surface; consumers needing
-  per-device detail call mihi directly.
-- CI smoke gate accepts 6 or 7 lines; DCE parity check
-  cross-validates GPU presence between non-DCE and DCE'd builds.
-- **Dep gate**: mihi ≥ 0.4.0 (satisfied — mihi was at 0.7.0).
-- **Acceptance**: `iam` on archaemenid (AMD Ryzen 7 5800H, integrated
-  Radeon) prints "GPU: AMD Radeon (PCI 0x1002:0x1638)".
+### Docs
 
-### M4 — Output-shape ADR (v0.5.0) — ✅ shipped 2026-05-19
+- **doc-health re-sweep.** Rows not touched since the v0.9.0-era sweep
+  have not been re-read; the ledger says so itself. Re-read each one
+  and re-date it.
+- **README.md, `docs/guides/getting-started.md` and
+  `docs/examples/sample-output.txt`** checked against the current pins
+  and output. Part of the sweep, called out because they are the first
+  files a user reads.
 
-All three M4 deliverables in one cut: ADR + sample output + the
-byte-exact test harness (achieved via an `iam_render*` refactor —
-renderers now write into a caller-buffer instead of issuing per-
-line write syscalls, which made the contract observable to tests).
+## 1.3.x — GPU line accuracy
 
-- ✅ ADR: `docs/adr/0001-output-shape.md` — line order, 8-byte label
-  column, `(unknown)` fallback, single-optional-GPU rule, no-color
-  / pipe-equivalence, exit-0 contract, alternatives-considered.
-- ✅ Sample output captured in `docs/examples/sample-output.txt`.
-- ✅ 39 byte-exact tests covering per-label padding, fallback paths,
-  six-/seven-line assembled output, all-probes-failed degraded.
-- **Dep gate**: none (decision is local).
-- **Acceptance**: ADR landed; sample output reproducible across
-  runs; test suite executes the contract on synthetic inputs.
+What the `GPU:` line prints and what producing it costs. Each item is
+gated upstream and lands with the mihi pin that carries the fix.
 
-### M5 — Harden + dogfood (v0.6.0) — ✅ shipped 2026-05-19
+- **Placeholder GPU sizes print as measured.** ai-hwaccel's figures for
+  NVIDIA / Intel (Vulkan scan: 4 / 2 GiB), Cerebras (44 GiB), Graphcore
+  (900 MiB) and Gaudi / Neuron (by generation) are not read from the
+  device, and iam prints them in the ADR 0003 `[N GiB]` suffix. ADR
+  0003 already prints the bare device name when the size is 0.
+  *Gate: mihi / ai-hwaccel reporting an unknown size as 0, or saying
+  whether a size was measured.* iam-side handling instead would need
+  an ADR 0003 amendment.
+- **dGPU wake on every invocation** (mihi audit U-1). *Gate:
+  ai-hwaccel's no-wake PCIe path (mihi roadmap 1.6.x).*
+- **Probe cost of ai-hwaccel 2.5.5's no-exec path** (+18–24 % per
+  invocation at 1.2.1). *Gate: upstream ai-hwaccel / mihi.*
 
-All four deliverables landed. v0.6.0 cuts on M5 completion; the
-original "v0.9.0 = M5 baseline" plan was telescoped — M5.5
-(security re-audit, v0.7.0) and the v0.9.0 RC now sit between M5
-and M6.
+## 1.x.x — Gated, no release assigned
 
-- ✅ Invocation-time benchmark: `iam` cold-start ~1.5 ms on
-      archaemenid (M5 gate: < 10 ms). 6.5× headroom — see
-      `docs/benchmarks.md`.
-- ✅ 3-point benchmark trend in `docs/benchmarks.md` —
-      v0.3.0 (~555 µs, pre-GPU) → M3@9df0859 (~1514 µs, +GPU
-      probe) → v0.5.0 (~1511 µs, +single-flush). Trend caught the
-      GPU probe as the dominant cost; M4 single-flush refactor
-      was nominal at this scale (recorded honestly).
-- ✅ P(-1) hardening pass — security audit filed at
-      `docs/audit/2026-05-19-audit.md`. One open finding (F-001:
-      TTY-escape sanitization on mihi strings, LOW) to address
-      before M6 freeze; one INFO note (F-002: strlen invariant
-      cross-referenced to mihi audit).
-- ✅ Maintainer uses `iam` in MOTD for one release cycle —
-      dogfood ran from 2026-05-19 v0.5.0 cut through the v0.6.0
-      cut (`~/.local/bin/iam` → `build/iam`, called from
-      `~/.zshrc`, every interactive shell). No issues observed
-      across the uptime cycle / multi-tab spawn pattern. The
-      cycle-marker convention is "next release cuts" → v0.6.0
-      IS the marker.
+- **F-002**: `strlen` on mihi cstrings is trust-dependent;
+  `IAM_VALUE_MAX` bounds the copy, not the scan. *Gate: an `n`-limited
+  probe variant in mihi.*
 
-### M5.5 — Security + code re-audit (v0.7.0) — ✅ shipped 2026-05-19
+## Out of scope
 
-All three M5.5 deliverables landed in one cut. Source `src/*.cyr`
-unchanged from v0.5.0 / v0.6.0; the v0.7.0 release is pure
-audit-trail closure.
-
-- ✅ **Web research**: 0day / CVE check against the dep tree —
-      mihi @ 0.7.0, ai-hwaccel @ 2.2.6, cyrius 6.0.1 toolchain,
-      stdlib bundle. **Clean**: no public CVE / advisory entries
-      against any direct dep (all first-party MacCracken
-      projects). Name-collision noise ("Cyrus IMAP" / "Cyrus SASL"
-      for cyrius; "NVIDIA Container Toolkit" CVEs for ai-hwaccel)
-      documented and dismissed. Queries + sources captured in the
-      refreshed audit doc.
-- ✅ **Code re-review**: full re-walk of `src/*.cyr` confirmed
-      zero drift since the v0.5.0 audit baseline
-      (`git diff a57c17b..HEAD -- src/` empty). F-001 confirmed
-      still open, F-002 confirmed still INFO. Build / lint /
-      test / runtime smoke re-verified against v0.6.0 codebase.
-- ✅ **Refreshed audit doc**: `docs/audit/2026-05-19-m5.5-audit.md`
-      filed. Supersedes the 2026-05-19 M5 audit for the M5.5
-      scope; the M5 doc stays in the directory as historical
-      record per audit-trail convention. Conclusion section names
-      F-001 as the lone v1.0 blocker and F-002 as accepted risk.
-      The `-m5.5-` infix disambiguates the same-day collision with
-      the M5 audit filename.
-- **Dep gate**: none (audit was local + read-only).
-- **Acceptance**: refreshed audit doc filed; CVE search returned
-      clean across the dep tree; no new findings escalated to v1.0
-      blockers.
-
-### M6 — v0.9.0 RC + v1.0.0
-
-- ✅ **v0.9.0 RC** — cut 2026-05-19. F-001 TTY-escape sanitizer
-  landed (`iam_copy_value` in `src/display.cyr`, wired into all
-  three renderers + 15 byte-exact tests). Follow-up audit at
-  [`docs/audit/2026-05-19-v0.9.0-audit.md`](../audit/2026-05-19-v0.9.0-audit.md)
-  filed — verdict pass, F-001 closed, no remaining v1.0 blockers
-  on the iam side. Bench refreshed: 1510 µs median, inside the
-  v0.5.0 noise floor (sanitizer is invisible at this scale).
-  v0.9.0 RC IS the freeze candidate; no further iam-side source
-  changes planned ahead of v1.0.
-- ⏳ **Pin to mihi 1.0.x** (mihi must ship 1.0 first; this is the
-  only remaining v1.0 gate). External to iam.
-- ⏳ Output shape frozen — ADR 0002 becomes the v1.0 contract
-  (accepted at v0.8.0; identity → runtime → hardware spine). ADR 0001
-  carries through for §1, §4, §5, §6.
-- ⏳ Run the full audit template against the new mihi version per
-  the v0.9.0 audit's *Next audit trigger* clause (mihi major bump
-  is mandatory).
-- ⏳ CHANGELOG `Breaking` framing dropped post-freeze (post-v1.0,
-  any output-shape change becomes a real `Breaking`).
-- ⏳ v1.0.0 cut.
-
-## Out of scope (for v1.0)
-
-The list keeps future contributors from adding to v1.0 by accident.
+The list keeps future contributors from adding to iam by accident.
 Split into two honest categories: items that would make iam stop
 being iam (the load-bearing non-features), and items that are
 deferred for sequencing reasons and may land in a later cut.
@@ -174,7 +118,7 @@ If you want one of these, the linked tool already exists.
   is," not "look pretty in seventeen ways." *Consuming* shell
   theming (terminal palette, `NO_COLOR`, prompt-toolkit
   conventions) is a different conversation and lives in the
-  *Deferred* list below under Color / shell-theme integration.
+  *Deferred* list below under Color / shell-theme consumption.
 - **Plugin system** — iam is a thin presentation layer over mihi.
   Pluggability lives in mihi (where probes are added) or in a
   sibling tool that consumes mihi.
@@ -205,30 +149,19 @@ conversation reopens.
   conversation. The intent is *consuming* the user's existing
   shell theming (terminal palette via standard escape codes,
   `NO_COLOR` / `FORCE_COLOR` env conventions, prompt-toolkit
-  semantics) — not iam shipping its own themes. Default-plain
-  stays a v1.0 gate so the byte contract freezes against the
-  no-color baseline; color additions post-v1.0 land as opt-in
-  and preserve plain bytes as the default pipe-target.
+  semantics) — not iam shipping its own themes. The v1.0 byte
+  contract froze on the no-color baseline, so color lands as
+  opt-in and plain bytes stay the default pipe target.
 - **Network probes** (e.g. local IP, link state) — deferred until
   kernel-side bring-up is operational. Adds a real probe surface
   to mihi first; iam adopts after.
-- **Runtime state** (Battery %, Swap used, Disk used%) — post-v1.0
-  consideration. The v1.0 freeze should ship with the stable
-  identity → kernel → uptime → hardware set; runtime-state lines
-  are the natural v2.0 conversation, additive on top of a frozen
-  base.
-
-## Pending upstream — agnosys → agnodrm decomposition
-
-- [x] **Drop the transitive agnosys dep.** ✅ **Closed.** iam referenced no agnosys
-  symbol itself; it pulled `agnosys-core` only so mihi's vendored bundle could resolve
-  `agnosys_uname`. mihi re-sourced uname at its 1.1.3 cut (`sys_uname` / `sys_sysinfo`,
-  off the cyrius stdlib `sys` module carved out at 6.1.28), so `[deps.agnosys]` came out
-  of `cyrius.cyml` at iam **1.1.3** — no iam code change, exactly as predicted. The last
-  physical trace, the orphaned `lib/agnosys-core.cyr`, was pruned at **1.1.6**.
+- **Runtime state** (Battery %, Swap used, Disk used%) — a v2.0
+  conversation. v1.0 froze the identity → kernel → uptime →
+  hardware set; runtime-state lines would be additive on top of
+  it.
 
 ## Cross-references
 
 - [`state.md`](state.md) — live status (mihi version pin, output lines)
 - [`../../CHANGELOG.md`](../../CHANGELOG.md) — release history
-- [mihi roadmap](https://github.com/MacCracken/mihi/blob/main/docs/development/roadmap.md) — the dep that gates every iam milestone
+- [mihi roadmap](https://github.com/MacCracken/mihi/blob/main/docs/development/roadmap.md) — where most gated items here resolve
