@@ -4,7 +4,7 @@ version = "${file:VERSION}"
 description = "iam — fastfetch-equivalent system info display. Pure inverse of whoami: whoami says who the user is, iam says what the system is. Thin presentation over the mihi probe library."
 license = "GPL-3.0-only"
 language = "cyrius"
-cyrius = "6.6.2"
+cyrius = "6.6.20"
 
 [build]
 entry = "src/main.cyr"
@@ -18,7 +18,11 @@ output = "iam"
 # ai-hwaccel symbols — the parser needs the full chain present;
 # DCE drops unused code from the linked binary.
 #
-# stdlib (tracks mihi 1.2.4's cyrius.cyml):
+# stdlib (the 21-leaf union frozen from mihi 1.2.4's sidecar; kept as-is at
+# 1.1.9). Since mihi 1.2.8 / ai-hwaccel 2.4.2, each bundle opens with an
+# `include` block for its own leaves, so this list no longer has to cover
+# them. A trim to iam's own needs was measured and declined: it brings back
+# seven unreachable `bayan_json_v_*` warnings. See docs/development/state.md.
 #   - `sys` provides the native uname/sysinfo plumbing (lib/sys.cyr) that
 #     mihi's bundle reads through `sys_uname` / `sys_sysinfo`. The old
 #     [deps.agnosys] git dep was dropped when cyrius retired the stale stdlib
@@ -43,13 +47,13 @@ stdlib = [
 # owns the probes (CLAUDE.md: "Probe via mihi, never inline").
 [deps.mihi]
 git = "https://github.com/MacCracken/mihi.git"
-tag = "1.2.4"
+tag = "1.2.8"
 modules = ["dist/mihi.cyr"]
 
 # ai-hwaccel: pulled in because mihi/gpu.cyr inside dist/mihi.cyr
 # references registry_detect_no_exec / profile_* / FAMILY_CPU. Pin
-# matches mihi 1.2.4's transitive (mihi's own [deps.ai-hwaccel]).
+# matches mihi 1.2.8's transitive (mihi's own [deps.ai-hwaccel]).
 [deps.ai-hwaccel]
 git = "https://github.com/MacCracken/ai-hwaccel.git"
-tag = "2.3.18"
+tag = "2.4.2"
 modules = ["dist/ai-hwaccel.cyr"]

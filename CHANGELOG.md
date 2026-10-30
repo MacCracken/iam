@@ -4,6 +4,69 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.1.9] - 2026-10-30
+
+**Toolchain `6.6.2` → `6.6.20`, mihi `1.2.4` → `1.2.8`, ai-hwaccel `2.3.18` → `2.4.2`.**
+The three move together: mihi 1.2.8 is the release that pins cyrius 6.6.20, and
+ai-hwaccel 2.4.2 is its transitive (2.5.x moved on to 6.7.18). Zero `src/` changes.
+Output on archaemenid is byte-identical to 1.1.8.
+
+### Changed
+
+- **`[package].cyrius` `6.6.2` → `6.6.20`.**
+- **`[deps.mihi]` `1.2.4` → `1.2.8`.** No probe signature, return shape or error
+  semantic changed across 1.2.5–1.2.8. The `mihi_uname` value-pair bind iam took at
+  1.1.8 is unchanged.
+- **`[deps.ai-hwaccel]` `2.3.18` → `2.4.2`**, matching mihi 1.2.8's own pin.
+- **`lib/` re-vendored from empty** (`rm -rf lib cyrius.lock`, `cyrius lib sync --full`,
+  `cyrius deps`). The full 113-file 6.6.20 snapshot: 97 stdlib files changed, three
+  new (`alloc_cx`, `poison`, `tls_hostid`), none removed; plus both dep bundles.
+  115 files in `lib/`. The lock was regenerated from empty because
+  6.6.20 keeps an old tag's `commit` line after a tag bump (fail-closed,
+  CYRIUS-2026-0030). It now carries 115 hashes, two commit pins (mihi `7daf8ec`,
+  ai-hwaccel `4d689d5`, both checked against the tags) and a `cyrius 6.6.20` trailer.
+- **Binary size**: `build/iam` 765,984 → 879,648 B; `CYRIUS_DCE=1` → 257,056 B.
+- `cyrius.cyml` comments refreshed for the new pins. The 21-leaf `[deps] stdlib`
+  list is **unchanged**. It was copied from mihi 1.2.4's sidecar, and mihi 1.2.8's
+  sidecar is now just `sys syscalls`, since each bundle `include`s its own leaves.
+  Trimming iam's list to its own needs halves the binary (measured at 434,512 B)
+  but brings back seven unreachable `bayan_json_v_*` build warnings, which mihi says
+  not to silence with the `bayan` monolith. Considered and declined: the list stays as-is.
+
+### Known issue: GPU line on NVIDIA / Intel Linux hosts
+
+ai-hwaccel 2.3.29 made the Vulkan backend native in no-exec mode: it reads
+`/sys/class/drm/card*/device/{vendor,device}` instead of skipping. **NVIDIA and
+Intel Linux hosts now get a `GPU:` line where 1.1.8 printed none** (six lines →
+seven, which the ADR 0002 shape allows). The value has two weak points:
+
+- the name is a vendor placeholder, `NVIDIA GPU (Vulkan)` / `Intel GPU (Vulkan)`;
+- `mihi_gpu_memory_bytes` returns a **fixed estimate, not a reading**: 4 GiB for
+  NVIDIA, 2 GiB for Intel. iam prints it in the ADR 0003 `[N GiB]` suffix like a
+  measured size, e.g. `GPU:    NVIDIA GPU (Vulkan) [4 GiB]`.
+
+AMD hosts are unaffected: the scan leaves `amdgpu` cards to ROCm, which reads the
+real `mem_info_vram_total`. Not fixed in this cut. The probe layer is the right place
+for it: if mihi returned `0` for a size it does not know, ADR 0003 already degrades to
+the bare device name with no iam change.
+
+### Verified
+
+On archaemenid (Ryzen 7 5800H, Radeon iGPU), replaying the `ci.yml` gates:
+
+- `cyrius deps --verify`: 115 verified, 0 failed
+- `cyrius lib sync --full` after `cyrius deps` is a no-op on `lib/` (the CI drift gate)
+- `cyrius build src/main.cyr build/iam`: no warnings; output byte-identical to a 1.1.8
+  binary built from `HEAD` on 6.6.2
+- `cyrius test tests/iam.tcyr`: **141 passed, 0 failed**, unchanged
+- `cyrius lint src/*.cyr` clean; `cyrius fmt --check` clean on `src/` and `tests/`
+- DCE parity: `CYRIUS_DCE=1` output byte-identical to the default build
+- cross-target: `--agnos src/main.cyr`, `--aarch64 src/main.cyr` and
+  `--aarch64 tests/iam.tcyr` compile with no warnings
+- bench: interleaved A/B against 1.1.8, five trials of N=500, medians 1603 µs (1.1.8)
+  vs 1624 µs (1.1.9). The 21 µs gap is smaller than either column's spread; see
+  [`docs/benchmarks.md`](docs/benchmarks.md).
+
 ## [1.1.8] - 2026-09-11
 
 ### Changed

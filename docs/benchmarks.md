@@ -173,6 +173,32 @@ per value byte, against realistic value lengths of ~10-50 bytes across
 seven lines — a few hundred comparisons total, well under this
 methodology's resolution. M5's < 10 ms gate holds with ~6.4x headroom.
 
+## v1.1.9 — toolchain + dep-floor A/B (2026-10-30)
+
+Not the same kind of A/B as the two above: the compiler is **not**
+held constant, because the toolchain move (6.6.2 → 6.6.20) is the
+change. Old binary is `HEAD` (1.1.8) built from `git archive` with
+its own 6.6.2 pin; new is the 1.1.9 tree. The question is whether
+ai-hwaccel 2.3.29's no-exec Vulkan sysfs scan, which now runs on every
+invocation, costs the login path anything. On this AMD box it finds
+no card to claim (it leaves `amdgpu` to ROCm), but it still walks
+the DRM nodes.
+
+Interleaved on `archaemenid` (kernel 7.2.11, load average ~2–4 during
+the run), five trials of the standard N=500 batch:
+
+| Tree | t1 | t2 | t3 | t4 | t5 | Median |
+| ------ | ---:| ---:| ---:| ---:| ---:| ------:|
+| v1.1.8 (cyrius 6.6.2, mihi 1.2.4)  | 1616 us | 1556 us | 1552 us | 1603 us | 1605 us | **1603 us** |
+| v1.1.9 (cyrius 6.6.20, mihi 1.2.8) | 1678 us | 1670 us | 1624 us | 1596 us | 1589 us | **1624 us** |
+
+**Verdict**: no measurable regression. The +21 µs (+1.3 %) gap is
+smaller than either column's spread (64 and 89 µs). v1.1.9 was slower
+in the first three pairs and level in the last two, so a small real
+cost from the new scan or the larger binary (765,984 → 879,648 B) is
+possible, but this method cannot resolve it. M5's < 10 ms gate holds
+with ~6.2x headroom.
+
 ## Reproducing
 
 From the repo root with a built binary:
