@@ -5,7 +5,22 @@
 
 ## Version
 
-**Current release**: **1.1.9** — 2026-10-30. **Toolchain + dep-floor
+**Current release**: **1.2.0** — 2026-10-30. **Toolchain refresh onto
+the cyrius 6.7 language minor**, zero `src/` changes: cyrius `6.6.20`
+→ **6.7.9**, mihi `1.2.8` → **1.3.0** (no probe or API change),
+ai-hwaccel stays **2.4.2** (no ai-hwaccel tag pins 6.7.9). None of
+6.7.x's new reserved words is an identifier in iam. `lib/` and
+`cyrius.lock` regenerated from empty: 115 files, two commit pins,
+`cyrius 6.7.9` trailer. Output on archaemenid is byte-identical to
+1.1.9; tests 141/141; bench 1586 → 1622 µs wall, noise. **Known
+issues, not fixed**: the 1.1.9 NVIDIA / Intel placeholder GPU size
+carries over unchanged. Separately, ai-hwaccel through 2.5.4 can
+report a phantom 32 GiB "Google TPU v4" on hosts with a
+`/sys/class/accel` node (Intel NPU, Gaudi, Cloud AI 100), which iam
+would print as the `GPU:` line. archaemenid has no such node. The
+TPU fix is in ai-hwaccel 2.5.5 / mihi 1.3.1, which need cyrius 6.7.18.
+
+**Previous**: 1.1.9 — 2026-10-30. **Toolchain + dep-floor
 refresh**, zero `src/` changes: cyrius `6.6.2` → **6.6.20**, mihi
 `1.2.4` → **1.2.8**, ai-hwaccel `2.3.18` → **2.4.2** (mihi
 1.2.8's own transitive; the three pins move together). `lib/` and
@@ -164,7 +179,7 @@ driver flushes the whole report with a single syscall.
 
 ## Toolchain
 
-- **Cyrius pin**: `6.6.20` (in `cyrius.cyml [package].cyrius`) — the
+- **Cyrius pin**: `6.7.9` (in `cyrius.cyml [package].cyrius`) — the
   single source of truth. No workflow YAML hardcodes a version; both
   `ci.yml` and `release.yml` read the pin out of the manifest.
 - **Install path (CI and local)**: cyrius's own
@@ -308,11 +323,11 @@ Direct (declared in `cyrius.cyml`):
   `dist/mihi.deps` sidecar. **It no longer matches.** Since mihi
   1.2.8 / ai-hwaccel 2.4.2 each bundle opens with `include` lines for
   its own leaves, and mihi's sidecar is just `sys syscalls`. The list
-  was kept unchanged at 1.1.9. Trimming it to what iam itself calls
+  was kept unchanged at 1.1.9 and 1.2.0. Trimming it to what iam itself calls
   (`syscalls string alloc io result sys assert bench`) was measured
   at 879,648 → 434,512 B with identical output and 141/141 tests,
   but it brings back seven unreachable `bayan_json_v_*` build
-  warnings. Kept as-is at 1.1.9 for that reason. Notes on the non-obvious
+  warnings. Kept as-is since 1.1.9 for that reason. Notes on the non-obvious
   entries: `sys` carries the
   native `uname`/`sysinfo` plumbing mihi reads through `sys_uname` /
   `sys_sysinfo` (it is opt-in-vendored — needs `cyrius lib sync`);
@@ -320,7 +335,7 @@ Direct (declared in `cyrius.cyml`):
   base64/bigint/u128 into the bayan distribution; `sakshi` joined at
   1.1.6 because ai-hwaccel 2.3.x routes detect-path diagnostics
   through it.
-- **mihi 1.2.8** — the probe library; every displayed line is a
+- **mihi 1.3.0** — the probe library; every displayed line is a
   `mihi_*` call. Contract-bound per mihi's v1.0 API freeze — the
   eleven symbols iam calls (`mihi_uname`, `mihi_hostname`,
   `mihi_kernel_name`, `mihi_kernel_version`, `mihi_distro`,
@@ -329,27 +344,29 @@ Direct (declared in `cyrius.cyml`):
   been signature-stable since 1.0.0. 1.2.4 adds an aarch64
   device-tree source for `mihi_cpu_model`, so an arm64 Linux box
   booted via device tree now renders a real `CPU:` value instead of
-  `(unknown)`; ACPI-booted arm64 still has no source. 1.2.5–1.2.8
+  `(unknown)`; ACPI-booted arm64 still has no source. 1.2.5–1.3.0
   changed no signature iam calls. What did change is what the GPU
   probes *find* (next entry).
 - **ai-hwaccel 2.4.2** — pulled in transitively (mihi's
   `dist/mihi.cyr` references ai-hwaccel symbols in its GPU block).
-  Matches mihi 1.2.8's own transitive pin. iam references no
+  Matches mihi 1.3.0's own transitive pin (no ai-hwaccel tag pins
+  cyrius 6.7.9). iam references no
   ai-hwaccel symbol directly; the bundle is present only so mihi's
   `gpu.cyr` parses, and DCE drops the unreached code from the
   binary. The no-exec API is the only surface mihi reaches. Since
   2.3.29 that path includes a native Vulkan sysfs scan, which is
   what gives NVIDIA / Intel hosts a GPU line with a placeholder
-  size (see *Version*).
+  size. 2.4.2's TPU detector also takes any `/sys/class/accel` node
+  for a TPU, which is fixed in 2.5.5 (see *Version*).
 
 `agnosys` is **not** a dependency and has not been since 1.1.3, when
 mihi rewired to `sys_uname` / `sys_sysinfo`. The last physical trace
 (the orphaned `lib/agnosys-core.cyr`) was pruned at 1.1.6.
 
 Vendored (`lib/`, managed by `cyrius deps` / `cyrius lib sync`):
-115 files — the 113-module 6.6.20 stdlib snapshot (including the
+115 files — the 113-module 6.7.9 stdlib snapshot (including the
 `lib/unicode/` sub-package) plus `mihi.cyr` and `ai-hwaccel.cyr`.
-`lib/` matches the pinned snapshot exactly as of 1.1.9; a mismatch
+`lib/` matches the pinned snapshot exactly as of 1.2.0; a mismatch
 makes `cyrius build` emit a `./lib/ shadows version-pinned` warning,
 which is the signal to re-run `cyrius lib sync --full`.
 
@@ -373,6 +390,7 @@ batches per build, full methodology in
 | v1.0.0 (M6)        |     ~1510 µs   |     7 |
 | v1.1.6 (refresh)   |     ~1578 µs   |     7 |
 | v1.1.9 (refresh)   |     ~1624 µs   |     7 |
+| v1.2.0 (refresh)   |     ~1622 µs   |     7 |
 
 M5 < 10 ms cold-start gate met with ~6.6× headroom at v1.0.0. GPU
 probe (M3) remains the dominant cost; single-flush refactor (M4)
@@ -401,6 +419,12 @@ five N=500 trials each: **1603 µs** vs **1624 µs**. The gap is
 smaller than either column's spread, so the new no-exec Vulkan scan
 has no measurable cost here. Detail in
 [`../benchmarks.md`](../benchmarks.md). Gate headroom ~6.2×.
+
+v1.2.0's row is the same kind of A/B against 1.1.9 (6.6.20 vs
+6.7.9), five N=500 trials, timed with bash `time` so CPU time could
+be read alongside wall time on a loaded box: **1586 → 1622 µs**
+wall, **1632 → 1668 µs** CPU. 1.2.0 was faster in three of the five
+pairs; noise.
 
 ## Audit
 

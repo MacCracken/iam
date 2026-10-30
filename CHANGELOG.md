@@ -4,6 +4,64 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-30
+
+**Toolchain `6.6.20` → `6.7.9`, mihi `1.2.8` → `1.3.0`.** iam's first release on the
+cyrius 6.7 language minor. mihi 1.3.0 is the release that pins 6.7.9. It changes no
+probe code and no API, and keeps ai-hwaccel at `2.4.2`. Zero `src/` changes. Output
+on archaemenid is byte-identical to 1.1.9.
+
+### Changed
+
+- **`[package].cyrius` `6.6.20` → `6.7.9`.** None of 6.7.x's newly reserved words
+  (`trait`, `const`, `true` / `false`, `do`, `dyn`) is used as an identifier in
+  `src/` or `tests/`. The only hit is the string literal `"true is true"` in
+  `tests/iam.tcyr`.
+- **`[deps.mihi]` `1.2.8` → `1.3.0`.** mihi's bundle is byte-identical to 1.2.8's
+  apart from its version stamp and one comment.
+- **`[deps.ai-hwaccel]` stays `2.4.2`**, matching mihi 1.3.0. No ai-hwaccel release
+  pins 6.7.9: 2.4.2 pins 6.6.20 and every 2.5.x pins 6.7.18.
+- **`lib/` and `cyrius.lock` regenerated from empty** (`rm -rf lib cyrius.lock`,
+  `cyrius lib sync --full`, `cyrius deps`). The 113-file 6.7.9 snapshot has the same
+  layout as 6.6.20's: 67 stdlib files changed, none added or removed, plus
+  `mihi.cyr`. `lib/ai-hwaccel.cyr` is unchanged. The lock has 115 hashes, two commit
+  pins (mihi `5a9f9b3`, checked against the tag; ai-hwaccel `4d689d5`, unchanged)
+  and a `cyrius 6.7.9` trailer.
+- **Binary size**: `build/iam` 879,648 → 879,072 B; `CYRIUS_DCE=1` 257,056 →
+  260,576 B.
+
+### Known issues: GPU line
+
+- **Carried from 1.1.9, unchanged:** on NVIDIA / Intel Linux hosts the `GPU:` line
+  shows a fixed placeholder size (4 GiB / 2 GiB) in the ADR 0003 suffix as if it
+  were measured. mihi 1.3.1 and 1.3.2 do not change this either.
+- **Newly documented upstream, present in every ai-hwaccel iam has pinned:** a
+  phantom **"Google TPU v4"**. ai-hwaccel through 2.5.4 types every
+  `/sys/class/accel/accelN` node except amdxdna's as a 32 GiB TPU, without checking
+  the driver. A host with an Intel NPU (`intel_vpu`, e.g. Core Ultra laptops), a
+  Gaudi (`habanalabs`) or a Cloud AI 100 (`qaic`) can therefore get a `GPU:` line
+  naming a TPU that is not there. Hosts with no `/sys/class/accel` node, including
+  archaemenid, are not affected. ai-hwaccel 2.5.5 fixes it. mihi 1.3.1 takes 2.5.5,
+  so the fix needs a cyrius 6.7.18 pin.
+
+### Verified
+
+On archaemenid (Ryzen 7 5800H, Radeon iGPU), replaying the `ci.yml` gates:
+
+- `cyrius deps --verify`: 115 verified, 0 failed
+- `cyrius lib sync --full` after `cyrius deps` is a no-op on `lib/`
+- `cyrius build src/main.cyr build/iam`: no warnings; output byte-identical to the
+  1.1.9 binary
+- `cyrius test tests/iam.tcyr`: **141 passed, 0 failed**, unchanged
+- `cyrius lint src/*.cyr` clean; `cyrius fmt --check` clean on `src/` and `tests/`
+- DCE parity: `CYRIUS_DCE=1` output byte-identical to the default build
+- cross-target: `--agnos src/main.cyr`, `--aarch64 src/main.cyr` and
+  `--aarch64 tests/iam.tcyr` compile with no warnings
+- F-004's flush checks: `iam | head -c 10` and `iam >&-` both exit 0
+- bench: interleaved A/B against 1.1.9, five trials of N=500: medians 1586 →
+  1622 µs wall, 1632 → 1668 µs CPU. 1.2.0 was faster in three of the five pairs,
+  so the gap is noise. See [`docs/benchmarks.md`](docs/benchmarks.md).
+
 ## [1.1.9] - 2026-10-30
 
 **Toolchain `6.6.2` → `6.6.20`, mihi `1.2.4` → `1.2.8`, ai-hwaccel `2.3.18` → `2.4.2`.**

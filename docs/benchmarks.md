@@ -199,6 +199,33 @@ cost from the new scan or the larger binary (765,984 → 879,648 B) is
 possible, but this method cannot resolve it. M5's < 10 ms gate holds
 with ~6.2x headroom.
 
+## v1.2.0 — cyrius 6.7.9 A/B (2026-10-30)
+
+Same question as v1.1.9, against 1.1.9: old binary built on 6.6.20,
+new on 6.7.9. mihi 1.3.0 changes no probe code and ai-hwaccel did not
+move, so the toolchain and the 67 re-vendored stdlib modules are the
+only variables.
+
+The box was busy (load average ~7 from other work), so this run used
+a bash script timing each N=500 batch with `time`, which reads CPU
+time (user + sys) next to wall time. CPU time is far less affected by
+other processes competing for the cores. Five interleaved trials:
+
+| Tree | t1 | t2 | t3 | t4 | t5 | Median |
+| ------ | ---:| ---:| ---:| ---:| ---:| ------:|
+| v1.1.9 wall | 1689 us | 1582 us | 1544 us | 1640 us | 1586 us | **1586 us** |
+| v1.2.0 wall | 1622 us | 1572 us | 1780 us | 1548 us | 1766 us | **1622 us** |
+| v1.1.9 CPU  | 1738 us | 1614 us | 1577 us | 1679 us | 1632 us | **1632 us** |
+| v1.2.0 CPU  | 1668 us | 1610 us | 1826 us | 1592 us | 1811 us | **1668 us** |
+
+**Verdict**: no regression. v1.2.0 was faster in three of the five
+pairs and slower in two, by more than the median gap. M5's < 10 ms
+gate holds with ~6.2x headroom.
+
+An earlier run the same minute, with the zsh `date +%s%N` loop, read
+~2100 us for both builds as the load average climbed. It is not
+recorded as a result, because the load moved more than either build did.
+
 ## Reproducing
 
 From the repo root with a built binary:
